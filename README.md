@@ -25,8 +25,9 @@ the other:
 [StandIn](https://standin.komaa.com) is the hosted media bridge that joins the Teams call and dials
 this bridge - you run no Teams media stack yourself.
 
-**Documentation**: Teams/StandIn setup and a full example walkthrough (voice agent + bridge +
-bitHuman avatar) live at [docs.komaa.com](https://docs.komaa.com/livekit/installation).
+**Documentation**: [komaa-com.github.io/livekit-msteams-bridge-py](https://komaa-com.github.io/livekit-msteams-bridge-py/)
+(getting started, example walkthrough, agents and dispatch, configuration and library reference,
+wire protocol). Teams/StandIn setup lives at [docs.komaa.com](https://docs.komaa.com/livekit/installation).
 
 ## Install
 
