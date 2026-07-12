@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "livekit-msteams-bridge"
+version = "0.1.0"
+description = "Put a LiveKit Agent on Microsoft Teams voice/video calls. Terminates the StandIn media bridge wire protocol on one side and a LiveKit room on the other: per-call rooms, explicit agent dispatch, 16 kHz PCM relay, data-topic context, call governors."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Alaaeldin Elhenawy", email = "alaamh@outlook.com" }]
+requires-python = ">=3.10"
+dependencies = ["aiohttp>=3.9,<4", "livekit>=0.17", "livekit-api>=0.7"]
+keywords = [
+  "livekit",
+  "microsoft-teams",
+  "voice",
+  "agent",
+  "websocket",
+  "bridge",
+  "telephony",
+  "avatar",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications :: Telephony",
+  "Topic :: Multimedia :: Sound/Audio",
+  "Framework :: AsyncIO",
+]
+
+[project.urls]
+Homepage = "https://komaa-com.github.io/livekit-msteams-bridge-py/"
+Documentation = "https://komaa-com.github.io/livekit-msteams-bridge-py/"
+"StandIn docs" = "https://docs.komaa.com/livekit/installation"
+Repository = "https://github.com/komaa-com/livekit-msteams-bridge-py"
+Issues = "https://github.com/komaa-com/livekit-msteams-bridge-py/issues"
+
+[project.scripts]
+livekit-msteams-bridge = "livekit_msteams_bridge.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.4"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "README.md", "LICENSE", ".env.example"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/livekit_msteams_bridge"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
