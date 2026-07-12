@@ -64,7 +64,7 @@ from livekit_msteams_bridge import sign, verify, is_fresh, TIMESTAMP_HEADER, SIG
 
 ts = int(time.time() * 1000)
 signature = sign(secret, ts, call_id)   # HMAC-SHA256(secret, f"{ts}.{call_id}") hex
-# send as headers X-OpenClawTeamsBridge-Timestamp / -Signature
+# send as headers X-StandIn-Timestamp / -Signature
 verify(secret, ts, call_id, signature)  # constant-time, False on any missing input
 is_fresh(ts, 60_000)                    # within the two-sided freshness window?
 ```

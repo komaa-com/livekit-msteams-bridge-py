@@ -19,7 +19,14 @@ from aiohttp import WSMsgType, web
 
 from .config import BridgeConfig
 from .session import RoomConnector
-from .hmac_auth import SIGNATURE_HEADER, TIMESTAMP_HEADER, is_fresh, verify
+from .hmac_auth import (
+    LEGACY_SIGNATURE_HEADER,
+    LEGACY_TIMESTAMP_HEADER,
+    SIGNATURE_HEADER,
+    TIMESTAMP_HEADER,
+    is_fresh,
+    verify,
+)
 from .livekit_room import connect_livekit_room
 from .log import logger
 from .metrics import metric_dec, metric_inc, render_metrics
@@ -90,8 +97,20 @@ def authorize_upgrade(
     # than authenticating anyone. load_config() requires it, but never trust that.
     if not cfg.worker_shared_secret:
         return {"error": "bridge shared secret is not configured"}
-    ts_header = headers.get(TIMESTAMP_HEADER) or headers.get(TIMESTAMP_HEADER.title()) or ""
-    sig = headers.get(SIGNATURE_HEADER) or headers.get(SIGNATURE_HEADER.title()) or ""
+    ts_header = (
+        headers.get(TIMESTAMP_HEADER)
+        or headers.get(TIMESTAMP_HEADER.title())
+        or headers.get(LEGACY_TIMESTAMP_HEADER)
+        or headers.get(LEGACY_TIMESTAMP_HEADER.title())
+        or ""
+    )
+    sig = (
+        headers.get(SIGNATURE_HEADER)
+        or headers.get(SIGNATURE_HEADER.title())
+        or headers.get(LEGACY_SIGNATURE_HEADER)
+        or headers.get(LEGACY_SIGNATURE_HEADER.title())
+        or ""
+    )
     try:
         ts = float(ts_header)
     except (TypeError, ValueError):

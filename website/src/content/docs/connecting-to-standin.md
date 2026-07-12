@@ -14,7 +14,7 @@ This bridge does not join Teams calls itself. That is the job of **StandIn** (th
 ```mermaid
 flowchart LR
     Teams["Teams call"]
-    StandIn["StandIn media bridge<br/>(hosted)<br/>dials {url}/{callId} with<br/>X-OpenClawTeamsBridge-Timestamp / -Signature"]
+    StandIn["StandIn media bridge<br/>(hosted)<br/>dials {url}/{callId} with<br/>X-StandIn-Timestamp / -Signature"]
     Bridge["your-host:8080<br/>(this bridge)"]
     Room["LiveKit room + agent"]
     Teams <--> StandIn
