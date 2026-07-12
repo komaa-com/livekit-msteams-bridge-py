@@ -12,8 +12,12 @@ import hmac as _hmac
 import math
 import time
 
-TIMESTAMP_HEADER = "x-openclawteamsbridge-timestamp"
-SIGNATURE_HEADER = "x-openclawteamsbridge-signature"
+TIMESTAMP_HEADER = "x-standin-timestamp"
+SIGNATURE_HEADER = "x-standin-signature"
+# Legacy header names (pre-rename). Still accepted during the transition; the
+# StandIn media bridge sends BOTH pairs, so either version interoperates.
+LEGACY_TIMESTAMP_HEADER = "x-openclawteamsbridge-timestamp"
+LEGACY_SIGNATURE_HEADER = "x-openclawteamsbridge-signature"
 
 
 def sign(secret: str, timestamp_ms: int | str, call_id: str) -> str:

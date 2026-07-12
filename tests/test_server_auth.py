@@ -1,6 +1,12 @@
 import time
 
-from livekit_msteams_bridge.hmac_auth import SIGNATURE_HEADER, TIMESTAMP_HEADER, sign
+from livekit_msteams_bridge.hmac_auth import (
+    LEGACY_SIGNATURE_HEADER,
+    LEGACY_TIMESTAMP_HEADER,
+    SIGNATURE_HEADER,
+    TIMESTAMP_HEADER,
+    sign,
+)
 from livekit_msteams_bridge.server import ReplayGuard, authorize_upgrade, call_id_from_path
 
 from conftest import make_config
@@ -24,6 +30,14 @@ def test_authorize_ok():
     cfg = make_config()
     auth = authorize_upgrade(cfg, "/stream/call-1", _headers("test-secret", "call-1"))
     assert auth == {"callId": "call-1"}
+
+
+def test_authorize_accepts_legacy_headers():
+    """Pre-rename workers send X-OpenClawTeamsBridge-*; they must keep working."""
+    cfg = make_config()
+    ts = int(time.time() * 1000)
+    headers = {LEGACY_TIMESTAMP_HEADER: str(ts), LEGACY_SIGNATURE_HEADER: sign("test-secret", ts, "call-1")}
+    assert authorize_upgrade(cfg, "/stream/call-1", headers) == {"callId": "call-1"}
 
 
 def test_authorize_bad_signature():
