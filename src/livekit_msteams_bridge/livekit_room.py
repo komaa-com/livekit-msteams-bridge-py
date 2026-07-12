@@ -34,6 +34,17 @@ TOPIC_GOODBYE = "teams.goodbye"
 _SAFE_CALL_ID = re.compile(r"[^A-Za-z0-9._@:-]")
 
 
+def is_agent_participant(participant: Any) -> bool:
+    """True when the participant is a LiveKit agent worker (dispatched via the
+    agent framework). Used to bind "the agent" by KIND rather than by
+    first-audio-wins, so a monitor/recorder/debugger that publishes audio first
+    can neither be mistaken for the agent nor block the real agent's audio."""
+    try:
+        return int(participant.kind) == int(rtc.ParticipantKind.PARTICIPANT_KIND_AGENT)
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 def _http_url(ws_url: str) -> str:
     """LiveKitAPI speaks HTTP; accept the ws(s):// form users configure."""
     if ws_url.startswith("wss://"):
@@ -78,6 +89,10 @@ class LiveKitRoomPort:
         # Sanitize: callId comes from a decoded URL segment (%2F would smuggle
         # "/"); keep room names to a safe charset and a conservative length.
         safe_call_id = _SAFE_CALL_ID.sub("-", call_id)
+        # 100 matches the Node bridge so both implementations derive the SAME
+        # room name for the same call (they must be interchangeable). Teams call
+        # ids are ~50-80 chars; if your LiveKit server enforces a shorter room
+        # name limit, shorten LIVEKIT_ROOM_PREFIX.
         room_name = f"{cfg.livekit_room_prefix}{safe_call_id}"[:100]
         port = cls(cfg, log, room_name)
 
@@ -146,12 +161,28 @@ class LiveKitRoomPort:
         def _on_track_subscribed(
             track: rtc.Track, publication: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant
         ) -> None:
-            if track.kind == rtc.TrackKind.KIND_AUDIO:
-                self._log.info(f'subscribed to agent audio from "{participant.identity}"')
-                if self._agent_identity is None:
-                    self._agent_identity = participant.identity
-                    handlers.on_agent_joined(participant.identity)
-                self._start_pump(track, participant.identity, handlers)
+            if track.kind != rtc.TrackKind.KIND_AUDIO:
+                return
+            # Bind "the agent" by participant KIND, not first-audio-wins: in a
+            # room where a non-agent (monitor, recorder, second worker) publishes
+            # audio first, first-audio-wins would bind the wrong identity AND
+            # block the real agent's track behind the single-pump gate. Fall back
+            # to first-audio only when the participant kind is unavailable AND no
+            # agent has been bound yet (automatic-dispatch prototypes).
+            if self._agent_identity is None:
+                if not is_agent_participant(participant) and self._cfg.livekit_agent_name:
+                    self._log.info(
+                        f'ignoring audio from non-agent participant "{participant.identity}" '
+                        "(waiting for the dispatched agent)"
+                    )
+                    return
+                self._agent_identity = participant.identity
+                handlers.on_agent_joined(participant.identity)
+            elif participant.identity != self._agent_identity:
+                self._log.debug(f'ignoring audio from non-agent participant "{participant.identity}"')
+                return
+            self._log.info(f'subscribed to agent audio from "{participant.identity}"')
+            self._start_pump(track, participant.identity, handlers)
 
         @room.on("track_unsubscribed")
         def _on_track_unsubscribed(

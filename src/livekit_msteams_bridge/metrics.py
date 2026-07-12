@@ -17,6 +17,10 @@ _META: dict[str, tuple[str, str]] = {
     "bridge_frames_to_worker_total": ("Agent audio frames relayed to the worker", "counter"),
     "bridge_frames_dropped_total": ("Frames dropped under worker backpressure", "counter"),
     "bridge_room_connect_failures_total": ("LiveKit room connect failures", "counter"),
+    "bridge_governor_time_limit_total": ("Calls ended by the bridge-side time limit", "counter"),
+    "bridge_goodbyes_requested_total": ("Goodbye requests sent to the agent (either governor)", "counter"),
+    "bridge_worker_frames_unparseable_total": ("Inbound worker frames dropped as unparseable", "counter"),
+    "bridge_callid_mismatch_total": ("session.start callId != authenticated URL callId", "counter"),
 }
 
 
@@ -26,6 +30,11 @@ def metric_inc(name: str, by: float = 1) -> None:
 
 def metric_dec(name: str) -> None:
     metric_inc(name, -1)
+
+
+def reset_metrics() -> None:
+    """Zero every counter. For test isolation only - never call in production."""
+    _counts.clear()
 
 
 def render_metrics() -> str:

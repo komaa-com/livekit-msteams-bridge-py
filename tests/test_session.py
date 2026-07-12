@@ -264,3 +264,46 @@ async def test_junk_frames_dropped():
     session.handle_worker_message(json.dumps({"noType": True}))
     assert not session.closed
     session.end_call("test-done")
+
+
+async def test_empty_assistant_say_falls_back_to_configured_goodbye():
+    session, worker, room, _ = make_session()
+    session.handle_worker_message(start_msg())
+    await settle()
+    session.handle_worker_message(json.dumps({"type": "assistant.say", "text": "   "}))
+    assert room.goodbyes == ["goodbye"]  # cfg.goodbye_text, not the blank string
+    session.end_call("test-done")
+
+
+async def test_room_connect_retries_once():
+    worker = FakeWorkerPort()
+    room = FakeRoomPort()
+    attempts = []
+
+    async def flaky_connector(cfg_, log, call_id, metadata, handlers):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("transient blip")
+        return room
+
+    session = CallSession(make_config(), worker, "call-1", connect_room=flaky_connector)
+    session.handle_worker_message(start_msg())
+    await asyncio.sleep(0.5)  # covers the 0.3 s retry delay
+    assert len(attempts) == 2
+    assert session.room is room  # second attempt succeeded, call is up
+    assert worker.of_type("session.end") == []
+    session.end_call("test-done")
+
+
+async def test_room_connect_failing_twice_ends_call():
+    worker = FakeWorkerPort()
+
+    async def dead_connector(cfg_, log, call_id, metadata, handlers):
+        raise RuntimeError("livekit down")
+
+    session = CallSession(make_config(), worker, "call-1", connect_room=dead_connector)
+    session.handle_worker_message(start_msg())
+    await asyncio.sleep(0.5)
+    assert session.closed
+    ends = worker.of_type("session.end")
+    assert ends and ends[0]["reason"] == "agent-unavailable"

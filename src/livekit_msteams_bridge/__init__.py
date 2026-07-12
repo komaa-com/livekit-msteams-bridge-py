@@ -13,7 +13,7 @@ from .cli import load_dotenv
 from .config import BridgeConfig, load_config
 from .hmac_auth import SIGNATURE_HEADER, TIMESTAMP_HEADER, is_fresh, sign, verify
 from .log import Logger, logger
-from .metrics import render_metrics
+from .metrics import render_metrics, reset_metrics
 from .protocol import parse_worker_message, pcm16k_bytes_to_ms
 from .server import BridgeServer, ReplayGuard, authorize_upgrade, call_id_from_path, start_server
 from .session import AgentRoomPort, CallSession, RoomConnector, RoomHandlers, WorkerPort
@@ -42,16 +42,17 @@ __all__ = [
     "parse_worker_message",
     "pcm16k_bytes_to_ms",
     "render_metrics",
+    "reset_metrics",
     "sign",
     "start_server",
     "verify",
 ]
 
-# The real room connector lives in livekit_room (imported lazily by the server
-# so the pure-Python parts stay importable without the native livekit wheel).
-try:  # pragma: no cover - exercised only when livekit is installed
-    from .livekit_room import TOPIC_CONTEXT, TOPIC_GOODBYE, LiveKitRoomPort, connect_livekit_room  # noqa: F401
+from .livekit_room import (  # noqa: E402  (after __all__ on purpose)
+    TOPIC_CONTEXT,
+    TOPIC_GOODBYE,
+    LiveKitRoomPort,
+    connect_livekit_room,
+)
 
-    __all__ += ["TOPIC_CONTEXT", "TOPIC_GOODBYE", "LiveKitRoomPort", "connect_livekit_room"]
-except ImportError:  # livekit native wheel unavailable on this platform
-    pass
+__all__ += ["TOPIC_CONTEXT", "TOPIC_GOODBYE", "LiveKitRoomPort", "connect_livekit_room"]

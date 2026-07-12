@@ -43,10 +43,6 @@ def load_dotenv(path: str = ".env") -> None:
         pass  # no .env is fine
 
 
-# backwards-compatible alias (pre-0.1 name)
-_load_dotenv = load_dotenv
-
-
 async def _run() -> None:
     cfg = load_config()
     server = await start_server(cfg)

@@ -85,9 +85,9 @@ Everything is environment variables; names are identical to the Node package.
 | `LIVEKIT_ROOM_PREFIX` | no | `msteams-` | Room name prefix; the room is `{prefix}{callId}` (sanitized). |
 | `LIVEKIT_DELETE_ROOM_ON_END` | no | `true` | Delete the room at teardown so the agent job ends immediately (billing hygiene). |
 | `MAX_CALL_MINUTES` | no | `0` (off) | Bridge-side hard cap per call; on expiry the agent is asked to say goodbye, then the call ends. |
-| `GOODBYE_TEXT` / `GOODBYE_GRACE_MS` | no | (default line) / `8000` | Goodbye wording (sent on `teams.goodbye`) and playout grace. |
+| `GOODBYE_TEXT` / `GOODBYE_GRACE_MS` | no | (default line) / `8000` | Goodbye wording (sent on `teams.goodbye`) and playout grace. The call ends `GOODBYE_GRACE_MS` + a fixed 500 ms scheduling buffer after the goodbye request. |
 | `PORT` / `BIND` | no | `8080` / `0.0.0.0` | Listen port / bind address. |
-| `HMAC_FRESHNESS_MS` | no | `60000` | Allowed clock skew + replay window for the signed upgrade. |
+| `HMAC_FRESHNESS_MS` | no | `60000` | Two-sided freshness window: a timestamp up to 60 s in the past OR the future is accepted, and the replay guard holds a used handshake until the timestamp ages out. |
 | `MAX_CONNECTIONS` / `MAX_CONNECTIONS_PER_IP` | no | `64` / = total | Connection caps. |
 | `PRE_START_TIMEOUT_MS` | no | `10000` | Drop a worker that authenticates but never sends `session.start`. |
 | `WORKER_IDLE_TIMEOUT_MS` | no | `90000` | Dead-peer window (the worker heartbeats every 30 s). |
@@ -111,6 +111,13 @@ Notes for operators:
 - Barge-in: interruption handling lives **inside your LiveKit agent session** (VAD, turn-taking),
   exactly as for WebRTC callers; the room transport gives the bridge no interruption event to relay,
   so the worker's own flush-on-silence smooths the tail end.
+- The bridge participant's join token has a fixed **6 h TTL**. Calls that should be allowed to run
+  longer than that need a re-join strategy; in practice set `MAX_CALL_MINUTES` well below it.
+- Inbound Teams **video** (`video.frame`) is not forwarded to the room in this version - the bot's
+  tile is rendered by the worker's own avatar. Publishing caller video as a room track is on the
+  roadmap.
+- The Docker image exposes port **8080** and does not remap `PORT`/`BIND` at the Docker layer; use
+  `-e PORT=... -p <host>:<port>` together if you change them.
 
 ## Agent integration points
 

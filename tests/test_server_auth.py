@@ -80,3 +80,23 @@ def test_unauthenticated_probe_consumes_no_replay_slot():
     bad = {TIMESTAMP_HEADER: str(ts), SIGNATURE_HEADER: "0" * 64}
     assert "error" in authorize_upgrade(cfg, "/s/call-1", bad, replay)
     assert replay.size == 0
+
+
+def test_replay_guard_expiry_with_real_signature():
+    # a captured, VALIDLY SIGNED handshake must be single-use inside the window
+    # and unusable after it (is_fresh rejects it before the guard even runs)
+    from livekit_msteams_bridge.hmac_auth import is_fresh
+
+    cfg = make_config(hmac_freshness_ms=1000)
+    replay = ReplayGuard(cfg.hmac_freshness_ms)
+    ts = int(time.time() * 1000)
+    sig = sign("test-secret", ts, "call-r")
+    headers = {TIMESTAMP_HEADER: str(ts), SIGNATURE_HEADER: sig}
+    assert authorize_upgrade(cfg, "/s/call-r", headers, replay) == {"callId": "call-r"}
+    # immediate replay: rejected by the guard
+    assert authorize_upgrade(cfg, "/s/call-r", headers, replay).get("error") == "replayed handshake"
+    # after ts + window the guard record expires, but freshness rejects the
+    # stale timestamp anyway - the tuple is dead either way
+    later = ts + cfg.hmac_freshness_ms + 1
+    assert replay.claim("call-r", ts, sig, later)  # guard record aged out...
+    assert not is_fresh(ts, cfg.hmac_freshness_ms, later)  # ...but is_fresh closes the door

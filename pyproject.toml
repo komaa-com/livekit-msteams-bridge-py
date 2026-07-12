@@ -10,7 +10,9 @@ readme = "README.md"
 license = "MIT"
 authors = [{ name = "Alaaeldin Elhenawy", email = "alaamh@outlook.com" }]
 requires-python = ">=3.10"
-dependencies = ["aiohttp>=3.9,<4", "livekit>=0.17", "livekit-api>=0.7"]
+# livekit pins: tested against livekit 1.1.x / livekit-api 1.2.x; the rtc API
+# surface is verified by tests/test_livekit_sdk_surface.py on every CI run.
+dependencies = ["aiohttp>=3.9,<4", "livekit>=1.1,<2", "livekit-api>=1.2,<2"]
 keywords = [
   "livekit",
   "microsoft-teams",

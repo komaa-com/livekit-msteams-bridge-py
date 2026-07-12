@@ -14,6 +14,7 @@ flush-on-silence smooths this). Documented limitation of the room transport.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import time
 from collections import deque
@@ -143,7 +144,7 @@ class CallSession:
         self._last_worker_activity_ms = _now_ms()
         idle_ms = cfg.worker_idle_timeout_ms if cfg.worker_idle_timeout_ms > 0 else DEFAULT_WORKER_IDLE_TIMEOUT_MS
         self._idle_ms = idle_ms
-        self._idle_task = asyncio.create_task(self._idle_watchdog(max(0.02, min(idle_ms / 3000, 30.0))))
+        self._idle_task = asyncio.create_task(self._idle_watchdog(max(0.02, min(idle_ms / 6000, 15.0))))
 
     # ---- lifecycle wiring (called by the server's read loop) ----
 
@@ -182,6 +183,7 @@ class CallSession:
     def _on_worker_message(self, raw: str | bytes) -> None:
         msg = parse_worker_message(raw)
         if msg is None:
+            metric_inc("bridge_worker_frames_unparseable_total")
             self.log.warn("unparseable worker frame; dropping")
             return
         mtype = msg["type"]
@@ -238,8 +240,12 @@ class CallSession:
             # to the agent is a future feature (publish as a room video track).
             self.log.debug("video.frame ignored (no room video publish in v1)")
         elif mtype == "assistant.say":
-            # worker-side governor: ask the agent to speak, the worker tears down after
-            self._perform_goodbye(str(msg.get("text") or ""))
+            # worker-side governor: ask the agent to speak, the worker tears down
+            # after. An empty text would ask the agent to say nothing - fall back
+            # to the configured goodbye line.
+            text = msg.get("text")
+            text = text.strip() if isinstance(text, str) else ""
+            self._perform_goodbye(text or self.cfg.goodbye_text)
         elif mtype == "session.end":
             self.log.info(f"session.end from worker: {msg.get('reason')}")
             self._teardown("worker-session-end")
@@ -268,6 +274,7 @@ class CallSession:
             return
         msg_call_id = msg.get("callId")
         if msg_call_id and msg_call_id != self.call_id:
+            metric_inc("bridge_callid_mismatch_total")
             self.log.error(f"session.start callId {msg_call_id} != URL callId {self.call_id}; closing")
             self.end_call("callid-mismatch")
             return
@@ -296,7 +303,16 @@ class CallSession:
             on_error=lambda err: self.log.warn(f"room error: {err}"),
         )
         try:
-            room = await self._connect_room(self.cfg, self.log, self.call_id, metadata, handlers)
+            try:
+                room = await self._connect_room(self.cfg, self.log, self.call_id, metadata, handlers)
+            except Exception as first_err:
+                # one retry with a short delay: a transient LiveKit blip should
+                # not end the call on the first attempt
+                self.log.warn(f"room connect failed ({first_err}); retrying once")
+                await asyncio.sleep(0.3)
+                if self.closed:
+                    return
+                room = await self._connect_room(self.cfg, self.log, self.call_id, metadata, handlers)
         except Exception as err:
             metric_inc("bridge_room_connect_failures_total")
             self.log.error(f"could not join the LiveKit room: {err}")
@@ -347,6 +363,7 @@ class CallSession:
         if self.closed:
             return
         self.log.info("governor: call time limit reached")
+        metric_inc("bridge_governor_time_limit_total")
         self._perform_goodbye(self.cfg.goodbye_text)
         # One deadline: the goodbye request is a data publish with no reported
         # duration, so the grace IS the budget (nothing async can wedge the
@@ -368,7 +385,11 @@ class CallSession:
             self.log.info("goodbye already in progress; ignoring duplicate")
             return
         self._goodbye_in_progress = True
+        metric_inc("bridge_goodbyes_requested_total")
         self.log.info("requesting agent goodbye")
+        # turnId 0: the bridge does not track worker turn ids; the worker's
+        # playback flush ignores the value, the field only has to serialize
+        # (same contract as the Node bridge).
         self._send_to_worker({"type": "assistant.cancel", "turnId": 0})
         if self.room is not None:
             self.room.send_goodbye(text)
@@ -383,8 +404,9 @@ class CallSession:
             "payloadBase64": base64_pcm,
         }
         self._out_seq += 1
-        pcm_bytes = (len(base64_pcm) * 3) // 4 - base64_pcm.count("=", -2)
-        self._out_timestamp_ms += pcm16k_bytes_to_ms(pcm_bytes)
+        # exact decoded length (frames are <=1 KB, so the decode is cheap and is
+        # correct for unpadded base64 where arithmetic on the string length drifts)
+        self._out_timestamp_ms += pcm16k_bytes_to_ms(len(base64.b64decode(base64_pcm)))
         metric_inc("bridge_frames_to_worker_total")
         self._send_to_worker(frame)
 
@@ -426,7 +448,8 @@ class CallSession:
             return
         self.closed = True
         self.log.info(f"teardown: {reason}")
-        metric_inc("bridge_call_seconds_total", round(time.monotonic() - self._started_at))
+        # bridge_call_seconds_total is recorded by the server's read loop (single
+        # owner) - do not also count it here or every call reports ~2x.
         for handle in (self._governor_handle, self._goodbye_handle):
             if handle:
                 handle.cancel()

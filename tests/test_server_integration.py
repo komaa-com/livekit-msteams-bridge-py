@@ -105,3 +105,22 @@ async def test_pre_start_timeout_closes_idle_worker(running_server):
             if frame.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
                 break
         assert got_end
+
+
+async def test_call_seconds_counted_exactly_once(running_server):
+    # regression: session teardown AND the server read loop both used to count
+    # bridge_call_seconds_total, reporting ~2x the real duration
+    from livekit_msteams_bridge.metrics import reset_metrics, render_metrics
+
+    cfg, _ = running_server
+    reset_metrics()
+    async with aiohttp.ClientSession() as s:
+        ws = await s.ws_connect(url(cfg, "/stream/call-secs"), headers=signed_headers("call-secs"))
+        await ws.send_str(json.dumps({"type": "session.start", "callId": "call-secs", "threadId": "t", "caller": {}}))
+        await asyncio.sleep(0.4)
+        await ws.close()
+    await asyncio.sleep(0.1)
+    line = next(ln for ln in render_metrics().splitlines() if ln.startswith("bridge_call_seconds_total "))
+    seconds = float(line.split()[1])
+    # single-counted: ~0.4 s. The old double-count would report ~0.8 s.
+    assert 0.25 <= seconds <= 0.65, line
