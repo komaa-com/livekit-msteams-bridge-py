@@ -43,7 +43,7 @@ Requires Python 3.10+.
 LIVEKIT_URL=wss://your-project.livekit.cloud \
 LIVEKIT_API_KEY=API... \
 LIVEKIT_API_SECRET=... \
-LIVEKIT_AGENT_NAME=teams-voice-agent \
+LIVEKIT_AGENT_NAME=standin-voice-agent \
 WORKER_SHARED_SECRET=... \
 livekit-msteams-bridge
 ```
@@ -54,7 +54,7 @@ per call. Expose the port with a tunnel and register the `wss://` URL as your id
 **Agent voice URL** in the StandIn dashboard.
 
 `LIVEKIT_AGENT_NAME` must equal the `agent_name` your worker registers with
-(`WorkerOptions(entrypoint_fnc=..., agent_name="teams-voice-agent")`). A mismatch is the classic
+(`WorkerOptions(entrypoint_fnc=..., agent_name="standin-voice-agent")`). A mismatch is the classic
 silent failure: the room is created, the caller hears nothing, and the worker never gets a job.
 
 ## Embed

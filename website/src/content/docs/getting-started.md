@@ -10,7 +10,7 @@ By the end of this page a LiveKit agent answers a Microsoft Teams call. You need
 A LiveKit call needs **two** processes: your agent runs as a worker, and the bridge dispatches it into a per-call room. Register the worker under an agent name:
 
 ```python
-cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="teams-voice-agent"))
+cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="standin-voice-agent"))
 ```
 
 Any existing LiveKit agent works unchanged - or start from the ready-made examples (a minimal voice pipeline and a bitHuman avatar) referenced in [Run the Example](/livekit-msteams-bridge-py/example/).
@@ -27,7 +27,7 @@ As a CLI:
 LIVEKIT_URL=wss://your-project.livekit.cloud \
 LIVEKIT_API_KEY=API... \
 LIVEKIT_API_SECRET=... \
-LIVEKIT_AGENT_NAME=teams-voice-agent \
+LIVEKIT_AGENT_NAME=standin-voice-agent \
 WORKER_SHARED_SECRET=... \
   livekit-msteams-bridge
 ```
@@ -93,7 +93,7 @@ Call your Teams bot (or join the sandbox meeting). In the bridge logs you should
 INFO  [server] worker connected for call 19:meeting_ab... (1/64)
 INFO  [call:19:meeting_ab] session.start (direction=inbound, recording=unknown)
 INFO  [call:19:meeting_ab] LiveKit room "msteams-19-meeting_ab..." joined
-INFO  [call:19:meeting_ab] agent "teams-voice-agent" dispatched
+INFO  [call:19:meeting_ab] agent "standin-voice-agent" dispatched
 INFO  [call:19:meeting_ab] LiveKit room "msteams-19-meeting_ab..." relaying
 ```
 

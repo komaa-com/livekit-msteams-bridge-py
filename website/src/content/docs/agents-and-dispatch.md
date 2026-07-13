@@ -12,14 +12,16 @@ When `LIVEKIT_AGENT_NAME` is set, the bridge creates the per-call room and then 
 Register the name on your worker:
 
 ```python
-cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="my-teams-agent"))
+cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="standin-agent"))
 ```
 
 ```bash
-LIVEKIT_AGENT_NAME=my-teams-agent
+LIVEKIT_AGENT_NAME=standin-agent
 ```
 
-Automatic dispatch (no name; an agent joins every room) still works for a quick prototype, but LiveKit recommends explicit dispatch for anything real - otherwise every room in your project pulls in the agent.
+**The names must match, or the agent never joins.** A worker registered with `agent_name` is reachable *only* by explicit dispatch. If you set a name on the worker but leave `LIVEKIT_AGENT_NAME` unset, the bridge falls back to automatic dispatch, the named worker ignores it, and the call sits silent with no agent - the single most common setup mistake. Set `LIVEKIT_AGENT_NAME` to the worker's exact `agent_name`.
+
+Automatic dispatch (no name on either side; the agent joins every room) still works for a quick prototype, but LiveKit recommends explicit dispatch for anything real - otherwise every room in your project pulls in the agent.
 
 ## Per-call metadata
 

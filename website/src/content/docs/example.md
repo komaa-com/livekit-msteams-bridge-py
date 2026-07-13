@@ -28,7 +28,7 @@ uv run voice_agent.py dev
 
 (Plain pip works too: `pip install -r requirements.txt && python voice_agent.py dev`.)
 
-The worker registers as **`teams-voice-agent`** and waits - it will not join anything until the bridge creates a room and dispatches it.
+The worker registers as **`standin-voice-agent`** and waits - it will not join anything until the bridge creates a room and dispatches it.
 
 ## 2. Run the bridge example
 
@@ -36,7 +36,7 @@ The worker registers as **`teams-voice-agent`** and waits - it will not join any
 pip install livekit-msteams-bridge
 git clone https://github.com/komaa-com/livekit-msteams-bridge-py
 cd livekit-msteams-bridge-py/examples/basic-bridge
-cp .env.example .env   # same LiveKit project + LIVEKIT_AGENT_NAME=teams-voice-agent + WORKER_SHARED_SECRET
+cp .env.example .env   # same LiveKit project + LIVEKIT_AGENT_NAME=standin-voice-agent + WORKER_SHARED_SECRET
 python main.py
 ```
 
@@ -52,7 +52,7 @@ The `main.py` is the recommended embedding shape in ~25 lines: `load_dotenv()`, 
 
 1. Expose port 8080 with a tunnel (`tailscale funnel --bg --https=8080 8080`, `cloudflared tunnel --url http://localhost:8080`, or `ngrok http 8080`).
 2. In your [StandIn dashboard](https://standin.komaa.com/dashboard), set the identity's **Agent voice URL** to the `wss://.../voice/msteams/stream` form and make sure the shared secret equals `WORKER_SHARED_SECRET`.
-3. Call your Teams bot (or join the sandbox meeting). The bridge creates the room, dispatches `teams-voice-agent`, and the agent answers.
+3. Call your Teams bot (or join the sandbox meeting). The bridge creates the room, dispatches `standin-voice-agent`, and the agent answers.
 
 ## 4. Swap in the avatar agent
 
@@ -62,7 +62,7 @@ The `main.py` is the recommended embedding shape in ~25 lines: `load_dotenv()`, 
 uv run avatar_agent.py dev
 ```
 
-and restart the bridge with `LIVEKIT_AGENT_NAME=teams-avatar-agent`. The caller hears the avatar's audio; the avatar's video stays in the room (the Teams tile is rendered by StandIn's own animated avatar - see [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/)).
+and restart the bridge with `LIVEKIT_AGENT_NAME=standin-avatar-agent`. The caller hears the avatar's audio; the avatar's video stays in the room (the Teams tile is rendered by StandIn's own animated avatar - see [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/)).
 
 ## What the example agents demonstrate
 

@@ -19,7 +19,7 @@ def make_config(**overrides: Any) -> BridgeConfig:
         livekit_api_secret="secret",
         tile_video="off",
         tile_video_fps=10,
-        livekit_agent_name="teams-voice-agent",
+        livekit_agent_name="standin-voice-agent",
         livekit_room_prefix="msteams-",
         livekit_delete_room_on_end=True,
         max_call_minutes=0,
