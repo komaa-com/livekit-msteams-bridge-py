@@ -68,3 +68,22 @@ def test_http_url_normalization():
     assert _http_url("wss://x.livekit.cloud") == "https://x.livekit.cloud"
     assert _http_url("ws://localhost:7880") == "http://localhost:7880"
     assert _http_url("https://x") == "https://x"
+
+
+def test_rtc_video_surface():
+    """Exact symbols video_relay.py (avatar video relay) relies on - design doc
+    §5.0: capacity=1 ring (latest-wins in the SDK), FFI-side RGB24 conversion,
+    participant+source subscription, publisher-timeline timestamps."""
+    sig = inspect.signature(rtc.VideoStream.from_participant)
+    for param in ("participant", "track_source", "format", "capacity"):
+        assert param in sig.parameters, f"VideoStream.from_participant lost {param}="
+    assert hasattr(rtc.VideoBufferType, "RGB24")
+    assert hasattr(rtc.TrackSource, "SOURCE_CAMERA")
+    assert hasattr(rtc.TrackKind, "KIND_VIDEO")
+    fields = rtc.VideoFrameEvent.__dataclass_fields__
+    assert "frame" in fields and "timestamp_us" in fields
+    for attr in ("data", "width", "height", "convert"):
+        assert hasattr(rtc.VideoFrame, attr)
+    assert hasattr(rtc.VideoStream, "aclose")
+    assert hasattr(rtc.Participant, "attributes")
+    assert hasattr(rtc.RemoteParticipant, "track_publications")

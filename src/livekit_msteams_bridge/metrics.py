@@ -16,6 +16,8 @@ _META: dict[str, tuple[str, str]] = {
     "bridge_frames_to_agent_total": ("Caller audio frames published to the room", "counter"),
     "bridge_frames_to_worker_total": ("Agent audio frames relayed to the worker", "counter"),
     "bridge_frames_dropped_total": ("Frames dropped under worker backpressure", "counter"),
+    "bridge_video_frames_sent_total": ("Avatar video frames relayed to the worker", "counter"),
+    "bridge_video_frames_dropped_total": ("Avatar video frames dropped under worker backpressure", "counter"),
     "bridge_room_connect_failures_total": ("LiveKit room connect failures", "counter"),
     "bridge_governor_time_limit_total": ("Calls ended by the bridge-side time limit", "counter"),
     "bridge_goodbyes_requested_total": ("Goodbye requests sent to the agent (either governor)", "counter"),

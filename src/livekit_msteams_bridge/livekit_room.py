@@ -22,6 +22,7 @@ from typing import Any
 from livekit import api, rtc
 
 from .config import BridgeConfig
+from .video_relay import start_video_relay
 from .log import Logger
 
 SAMPLE_RATE = 16_000
@@ -226,6 +227,22 @@ class LiveKitRoomPort:
                 self._log.debug(f'audio pump for "{identity}" ended')
 
         asyncio.ensure_future(pump())
+
+    # ---- avatar video relay (EXPERIMENTAL, LIVEKIT_TILE_VIDEO) ----
+
+    def start_avatar_relay(self, sink: Any) -> Any:
+        """Arm the display.frame relay on this room; returns its stop().
+        The relay keys off the SAME agent identity this port binds for audio
+        (design finding D: never invent a second binding)."""
+        assert self._room is not None
+        return start_video_relay(
+            self._cfg.tile_video,
+            self._cfg.tile_video_fps,
+            self._log,
+            self._room,
+            lambda: self._agent_identity,
+            sink,
+        )
 
     # ---- AgentRoomPort ----
 

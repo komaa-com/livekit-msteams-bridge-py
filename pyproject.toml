@@ -47,7 +47,8 @@ Issues = "https://github.com/komaa-com/livekit-msteams-bridge-py/issues"
 livekit-msteams-bridge = "livekit_msteams_bridge.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.4"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.4", "Pillow>=10"]
+avatar = ["Pillow>=10"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src", "README.md", "LICENSE", ".env.example"]
