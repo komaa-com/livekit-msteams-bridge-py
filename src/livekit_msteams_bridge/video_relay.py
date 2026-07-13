@@ -94,9 +94,7 @@ def select_participant(room: rtc.Room, mode: str, agent_identity: str | None) ->
     # auto: prefer a participant that declares it publishes on behalf of the
     # agent (the avatar), else the agent identity itself.
     if agent_identity:
-        by_behalf = next(
-            (p for p in remotes if (p.attributes or {}).get(PUBLISH_ON_BEHALF) == agent_identity), None
-        )
+        by_behalf = next((p for p in remotes if (p.attributes or {}).get(PUBLISH_ON_BEHALF) == agent_identity), None)
         if by_behalf is not None:
             return by_behalf
         return next((p for p in remotes if p.identity == agent_identity), None)
@@ -166,9 +164,7 @@ def start_video_relay(
                     # clock.
                     seq = state["seq"]
                     state["seq"] = seq + 1
-                    sink.send_frame(
-                        seq, sink.now_media_ms(), base64.b64encode(jpeg).decode("ascii"), TILE_W, TILE_H
-                    )
+                    sink.send_frame(seq, sink.now_media_ms(), base64.b64encode(jpeg).decode("ascii"), TILE_W, TILE_H)
             except asyncio.CancelledError:
                 raise
             except Exception as err:
@@ -198,9 +194,7 @@ def start_video_relay(
         chosen = select_participant(room, tile_video, get_agent_identity())
         if chosen is None:
             return
-        has_video = any(
-            int(pub.kind) == int(rtc.TrackKind.KIND_VIDEO) for pub in chosen.track_publications.values()
-        )
+        has_video = any(int(pub.kind) == int(rtc.TrackKind.KIND_VIDEO) for pub in chosen.track_publications.values())
         if has_video:
             drain_participant(chosen)
 
@@ -222,10 +216,7 @@ def start_video_relay(
     def on_track_unsubscribed(track: rtc.Track, publication: Any, participant: Any) -> None:
         # Only the VIDEO track dropping ends the relay. The agent's audio track
         # unsubscribing (while its video persists) must NOT tear down live video.
-        if (
-            participant.identity == state["identity"]
-            and int(track.kind) == int(rtc.TrackKind.KIND_VIDEO)
-        ):
+        if participant.identity == state["identity"] and int(track.kind) == int(rtc.TrackKind.KIND_VIDEO):
             # from_participant keeps waiting for a re-publish; a swap restarts
             # cleanly via the next subscribe event instead.
             cancel_active()

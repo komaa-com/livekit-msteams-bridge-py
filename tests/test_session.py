@@ -325,7 +325,13 @@ async def test_display_frame_wire_shape():
     assert len(frames) == 1
     frame = frames[0]
     assert sorted(frame.keys()) == [
-        "dataBase64", "height", "mime", "seq", "ts", "type", "width",
+        "dataBase64",
+        "height",
+        "mime",
+        "seq",
+        "ts",
+        "type",
+        "width",
     ]
     assert frame["seq"] == 7
     assert frame["ts"] == 1234
