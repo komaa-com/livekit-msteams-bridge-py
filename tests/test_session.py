@@ -307,3 +307,29 @@ async def test_room_connect_failing_twice_ends_call():
     assert session.closed
     ends = worker.of_type("session.end")
     assert ends and ends[0]["reason"] == "agent-unavailable"
+
+
+async def test_display_frame_wire_shape():
+    """The avatar tile sink emits exactly the schema's field names.
+
+    The drift guard's surface check cannot see display.frame field drift (every
+    required field name also appears in another message this bridge constructs),
+    so this test IS the wire-shape protection for the hand-written construction
+    site: it exercises the real sink and pins the exact JSON keys.
+    """
+    from livekit_msteams_bridge.session import _TileSink
+
+    session, worker, room, connector = make_session()
+    _TileSink(session).send_frame(7, 1234, "AQID", 640, 360)
+    frames = worker.of_type("display.frame")
+    assert len(frames) == 1
+    frame = frames[0]
+    assert sorted(frame.keys()) == [
+        "dataBase64", "height", "mime", "seq", "ts", "type", "width",
+    ]
+    assert frame["seq"] == 7
+    assert frame["ts"] == 1234
+    assert frame["mime"] == "image/jpeg"
+    assert frame["dataBase64"] == "AQID"
+    assert frame["width"] == 640
+    assert frame["height"] == 360
