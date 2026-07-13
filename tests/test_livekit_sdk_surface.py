@@ -71,8 +71,8 @@ def test_http_url_normalization():
 
 
 def test_rtc_video_surface():
-    """Exact symbols video_relay.py (avatar video relay) relies on - design doc
-    §5.0: capacity=1 ring (latest-wins in the SDK), FFI-side RGB24 conversion,
+    """Exact SDK symbols video_relay.py (avatar video relay) relies on:
+    capacity=1 ring (latest-wins in the SDK), FFI-side RGB24 conversion,
     participant+source subscription, publisher-timeline timestamps."""
     sig = inspect.signature(rtc.VideoStream.from_participant)
     for param in ("participant", "track_source", "format", "capacity"):

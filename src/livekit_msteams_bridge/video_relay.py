@@ -30,8 +30,8 @@ from .metrics import metric_inc
 TILE_W = 640
 TILE_H = 360
 JPEG_QUALITY = 58
-# Separate, tighter than the 1 MB audio cap: video must fall back to the
-# rendered avatar promptly rather than build up seconds of skew.
+# Separate, tighter than the 1 MB audio cap: a loaded video path must go
+# quiet promptly rather than build up seconds of A/V skew.
 VIDEO_BACKPRESSURE_BYTES = 320 * 1024
 PUBLISH_ON_BEHALF = "lk.publish_on_behalf"
 
@@ -69,8 +69,8 @@ def load_jpeg_encoder(log: Logger) -> Callable[[bytes, int, int], bytes] | None:
         return None
 
     def encode(rgb: bytes, width: int, height: int) -> bytes:
-        # Downscale to the tile before encoding: the worker scales to its tile
-        # regardless, so shipping native avatar resolution only wastes bandwidth.
+        # Downscale to the tile size before encoding: shipping the avatar's
+        # native resolution only wastes bandwidth.
         img = Image.frombuffer("RGB", (width, height), rgb, "raw", "RGB", 0, 1)
         if (width, height) != (TILE_W, TILE_H):
             img = img.resize((TILE_W, TILE_H))
@@ -160,7 +160,7 @@ def start_video_relay(
                     last_send = now
                     # ts rides the sender's AUDIO media timeline (not wall
                     # clock): skew is only measurable if both streams share one
-                    # clock (design doc §6).
+                    # clock.
                     seq = state["seq"]
                     state["seq"] = seq + 1
                     sink.send_frame(

@@ -232,8 +232,8 @@ class LiveKitRoomPort:
 
     def start_avatar_relay(self, sink: Any) -> Any:
         """Arm the display.frame relay on this room; returns its stop().
-        The relay keys off the SAME agent identity this port binds for audio
-        (design finding D: never invent a second binding)."""
+        The relay keys off the SAME agent identity this port binds for
+        audio - one binding, never a second one invented for video."""
         assert self._room is not None
         return start_video_relay(
             self._cfg.tile_video,
