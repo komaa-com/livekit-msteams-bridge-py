@@ -131,14 +131,17 @@ def start_video_relay(
         async def drain() -> None:
             # capacity=1: the SDK ring drops the oldest frame, so this loop can
             # rate-limit + encode + send inline and latest-wins still holds.
-            stream = rtc.VideoStream.from_participant(
-                participant=participant,
-                track_source=rtc.TrackSource.SOURCE_CAMERA,
-                format=rtc.VideoBufferType.RGB24,
-                capacity=1,
-            )
+            # Construct INSIDE the try: a from_participant failure must log through
+            # the same warn path, not escape as an unretrieved task exception.
+            stream: Any = None
             last_send = 0.0
             try:
+                stream = rtc.VideoStream.from_participant(
+                    participant=participant,
+                    track_source=rtc.TrackSource.SOURCE_CAMERA,
+                    format=rtc.VideoBufferType.RGB24,
+                    capacity=1,
+                )
                 async for ev in stream:
                     if state["stopped"]:
                         break
@@ -172,7 +175,8 @@ def start_video_relay(
                 if not state["stopped"]:
                     log.warn(f"avatar video stream ended: {err}")
             finally:
-                await stream.aclose()
+                if stream is not None:
+                    await stream.aclose()
 
         state["task"] = asyncio.ensure_future(drain())
 
@@ -216,7 +220,12 @@ def start_video_relay(
             drain_participant(chosen)
 
     def on_track_unsubscribed(track: rtc.Track, publication: Any, participant: Any) -> None:
-        if participant.identity == state["identity"]:
+        # Only the VIDEO track dropping ends the relay. The agent's audio track
+        # unsubscribing (while its video persists) must NOT tear down live video.
+        if (
+            participant.identity == state["identity"]
+            and int(track.kind) == int(rtc.TrackKind.KIND_VIDEO)
+        ):
             # from_participant keeps waiting for a re-publish; a swap restarts
             # cleanly via the next subscribe event instead.
             cancel_active()
