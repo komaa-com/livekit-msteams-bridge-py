@@ -28,6 +28,15 @@ The bridge could not create/join the LiveKit room (it retries once before giving
 
 The classic dispatch mismatch: `LIVEKIT_AGENT_NAME` does not equal the `agent_name` your worker registered with, the worker is not running, or it is registered against a **different LiveKit project**. The bridge logs `agent "<name>" dispatched` - if your worker never logs a job for it, the name or project is wrong. Also check the worker machine's logs for crashed jobs (a missing `OPENAI_API_KEY` in the example agent, for instance).
 
+## The worker won't start, or the first call takes minutes to answer
+
+Large models - avatar runtimes (bitHuman, Tavus), local STT/TTS, turn detectors - take real time to load, and that trips two setup problems worth calling out because the symptom looks like the wire path is broken when it isn't:
+
+- **The worker exits at startup with `TimeoutError` / "error initializing process".** The model load overran the process-init deadline. Raise it: `WorkerOptions(..., initialize_process_timeout=300)`. A bitHuman `.imx` model converting for the first time can take a couple of minutes.
+- **The first call takes minutes to answer; later calls are instant.** A cold job process loads the model on demand. Two fixes, use both: load the model in your `prewarm` function and stash it in `proc.userdata` (so the entrypoint reuses it), and keep a process warm with `num_idle_processes >= 1` so a dispatch never waits on a cold load. Run `python your_agent.py download-files` once first to prefetch downloadable weights (silero VAD, the turn detector).
+
+If a call connects and dispatches but the agent then sits silent for a long time before speaking, this - not the handshake or the room - is almost always the cause.
+
 ## The agent's goodbye gets cut off
 
 `teams.goodbye` handlers must interrupt the current turn and speak with interruptions disabled; otherwise an in-flight answer can outlast `GOODBYE_GRACE_MS`. See the handler snippet in [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/).
