@@ -7,7 +7,7 @@ as JSON); this module holds the parse guard and the audio-time helper.
 Worker -> bridge types: session.start, session.end, recording.status,
 audio.frame, video.frame, participants, dtmf, ping, assistant.say.
 Bridge -> worker types: audio.frame, assistant.cancel, pong, session.end,
-expression, display.image.
+expression, display.image, display.frame.
 """
 
 from __future__ import annotations

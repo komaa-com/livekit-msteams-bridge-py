@@ -90,6 +90,40 @@ class RoomHandlers:
 RoomConnector = Callable[[BridgeConfig, Logger, str, dict[str, str], RoomHandlers], Awaitable[AgentRoomPort]]
 
 
+class _TileSink:
+    """video_relay.TileSink over a session: worker socket state + the outbound
+    AUDIO media clock (the ts contract that makes A/V skew measurable)."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session: "CallSession") -> None:
+        self._session = session
+
+    def is_open(self) -> bool:
+        return self._session.worker.is_open
+
+    def buffered_bytes(self) -> int:
+        return self._session.worker.buffered_bytes
+
+    def now_media_ms(self) -> int:
+        return round(self._session._out_timestamp_ms)
+
+    def send_frame(self, seq: int, ts: int, data_base64: str, width: int, height: int) -> None:
+        sent = self._session._send_to_worker(
+            {
+                "type": "display.frame",
+                "seq": seq,
+                "ts": ts,
+                "mime": "image/jpeg",
+                "dataBase64": data_base64,
+                "width": width,
+                "height": height,
+            }
+        )
+        if sent:
+            metric_inc("bridge_video_frames_sent_total")
+
+
 class CallSession:
     """Relay for a single authenticated worker connection.
 
@@ -131,6 +165,9 @@ class CallSession:
         # Teams recording gate: nothing is persisted by this bridge, but the
         # state is tracked and surfaced to the agent as context.
         self._recording_active = False
+
+        # EXPERIMENTAL avatar video relay (LIVEKIT_TILE_VIDEO): unwire on teardown
+        self._stop_avatar_relay: Callable[[], None] | None = None
 
         # governors
         self._governor_handle: asyncio.TimerHandle | None = None
@@ -334,6 +371,14 @@ class CallSession:
             room.send_context(self._pending_context.popleft())
         self.log.info(f'LiveKit room "{room.room_name}" relaying')
 
+        # EXPERIMENTAL: avatar video relay onto the Teams tile (default off).
+        # Optional on the port protocol; fakes without it simply skip the feature.
+        if self.cfg.tile_video != "off" and hasattr(room, "start_avatar_relay"):
+            try:
+                self._stop_avatar_relay = room.start_avatar_relay(_TileSink(self))
+            except Exception as err:
+                self.log.warn(f"avatar video relay failed to start: {err}")
+
         # bridge-side governor: LiveKit doesn't know about your billing
         if self.cfg.max_call_minutes > 0:
             loop = asyncio.get_running_loop()
@@ -418,7 +463,7 @@ class CallSession:
         # Backpressure: only the bulky realtime frames are droppable; control
         # frames (pong, session.end, assistant.cancel) are tiny and
         # semantically load-bearing.
-        droppable = msg.get("type") in ("audio.frame", "display.image")
+        droppable = msg.get("type") in ("audio.frame", "display.image", "display.frame")
         if droppable and self.worker.buffered_bytes > MAX_OUTBOUND_BUFFER_BYTES:
             self._dropped_frames += 1
             metric_inc("bridge_frames_dropped_total")
@@ -457,6 +502,12 @@ class CallSession:
         self._goodbye_handle = None
         if self._idle_task and not self._idle_task.done():
             self._idle_task.cancel()
+        if self._stop_avatar_relay is not None:
+            try:
+                self._stop_avatar_relay()
+            except Exception:
+                pass
+            self._stop_avatar_relay = None
         if self.room is not None:
             asyncio.ensure_future(self._close_room_safe(self.room))
             self.room = None
