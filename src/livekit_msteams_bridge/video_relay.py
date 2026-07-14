@@ -101,6 +101,19 @@ def select_participant(room: rtc.Room, mode: str, agent_identity: str | None) ->
     return None
 
 
+def _subscribed_video_track(participant: Any) -> Any:
+    """The participant's subscribed video track, ANY source. Avatar workers
+    (bitHuman etc.) publish their video WITHOUT a SOURCE_CAMERA tag - it lands as
+    SOURCE_UNKNOWN - so filtering by track_source drops every frame. Take the
+    KIND_VIDEO publication's track directly, matching LiveKit's own docs
+    (rtc.VideoStream(track))."""
+    for pub in participant.track_publications.values():
+        track = getattr(pub, "track", None)
+        if track is not None and int(pub.kind) == int(rtc.TrackKind.KIND_VIDEO):
+            return track
+    return None
+
+
 def start_video_relay(
     tile_video: str,
     tile_video_fps: float,
@@ -122,24 +135,27 @@ def start_video_relay(
 
     def drain_participant(participant: Any) -> None:
         """One drain task per selected participant; a re-selection replaces it."""
+        track = _subscribed_video_track(participant)
+        if track is None:
+            # Video not subscribed yet: leave the identity unbound so a later
+            # track_subscribed event re-triggers selection for this participant.
+            return
         cancel_active()
         state["identity"] = participant.identity
-        log.info(f'avatar video relay: draining camera track from "{participant.identity}"')
+        log.info(f'avatar video relay: draining video track from "{participant.identity}"')
 
         async def drain() -> None:
             # capacity=1: the SDK ring drops the oldest frame, so this loop can
             # rate-limit + encode + send inline and latest-wins still holds.
-            # Construct INSIDE the try: a from_participant failure must log through
-            # the same warn path, not escape as an unretrieved task exception.
+            # Construct INSIDE the try so a failure logs through the same warn
+            # path instead of escaping as an unretrieved task exception. Subscribe
+            # to the track DIRECTLY (not by SOURCE_CAMERA): avatar video is
+            # published untagged (SOURCE_UNKNOWN), so a source filter yields zero
+            # frames. Matches LiveKit's docs: rtc.VideoStream(track).
             stream: Any = None
             last_send = 0.0
             try:
-                stream = rtc.VideoStream.from_participant(
-                    participant=participant,
-                    track_source=rtc.TrackSource.SOURCE_CAMERA,
-                    format=rtc.VideoBufferType.RGB24,
-                    capacity=1,
-                )
+                stream = rtc.VideoStream(track, format=rtc.VideoBufferType.RGB24, capacity=1)
                 async for ev in stream:
                     if state["stopped"]:
                         break
