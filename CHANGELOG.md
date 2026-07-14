@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+- fix(avatar-relay): subscribe to the avatar worker's video track directly
+  instead of filtering by `SOURCE_CAMERA`. Virtual-avatar workers (bitHuman,
+  etc.) publish their video untagged — it arrives as `SOURCE_UNKNOWN`, not
+  `SOURCE_CAMERA` — so the source filter matched no track and relayed zero
+  frames. Now takes the participant's video publication and uses
+  `rtc.VideoStream(track)`, matching LiveKit's docs.
+
 ## 0.1.0 (unreleased)
 
 Initial release: Python port of `@komaa/livekit-msteams-bridge` (Node.js).
