@@ -24,7 +24,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 COPY worker.py .
 
 # Prefetch model weights (silero VAD etc.) at BUILD time. Needs no secrets.
-RUN python worker.py download-files
+RUN python -m livekit.agents download-files
 
 # LiveKit agent workers expose a health/debug port
 EXPOSE 8081

@@ -24,7 +24,7 @@ COPY worker.py .
 
 # Prefetch model weights (silero VAD etc.) at BUILD time so cold starts are
 # fast and the runtime needs no outbound model downloads. Needs no secrets.
-RUN python worker.py download-files
+RUN python -m livekit.agents download-files
 
 # LiveKit agent workers expose a health/debug port
 EXPOSE 8081

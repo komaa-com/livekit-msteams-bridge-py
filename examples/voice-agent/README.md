@@ -17,7 +17,7 @@ Any existing LiveKit agent works with the bridge unchanged except for three inte
 cp .env.example .env                 # LIVEKIT_URL/KEY/SECRET, OPENAI_API_KEY
 uv lock --upgrade                    # refresh uv.lock (optional; a lock ships in the repo)
 uv sync                              # install the environment
-uv run worker.py download-files      # prefetch model weights (silero VAD etc.)
+uv run python -m livekit.agents download-files      # prefetch model weights (silero VAD etc.)
 uv run worker.py dev                 # hot-reloading dev mode; `start` for production
 ```
 
