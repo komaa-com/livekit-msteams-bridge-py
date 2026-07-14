@@ -1,13 +1,12 @@
 [project]
-name = "teams-agents-examples"
+name = "teams-voice-agent-example"
 version = "0.1.0"
-description = "Example LiveKit agent answering Microsoft Teams calls via livekit-msteams-bridge (the Python bridge)"
+description = "Example LiveKit voice agent answering Microsoft Teams calls via livekit-msteams-bridge (the Python bridge)"
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "livekit-agents>=1.0",
     "livekit-plugins-openai>=1.0",
     "livekit-plugins-silero>=1.0",
-    "livekit-plugins-bithuman>=1.0",
     "python-dotenv>=1.0",
 ]
 
