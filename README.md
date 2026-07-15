@@ -85,6 +85,8 @@ Everything is environment variables; names are identical to the Node package.
 | `LIVEKIT_AGENT_NAME` | no | - | Named agent for explicit dispatch (recommended). Unset = automatic dispatch (prototype-only). |
 | `LIVEKIT_ROOM_PREFIX` | no | `msteams-` | Room name prefix; the room is `{prefix}{callId}` (sanitized). |
 | `LIVEKIT_DELETE_ROOM_ON_END` | no | `true` | Delete the room at teardown so the agent job ends immediately (billing hygiene). |
+| `LIVEKIT_TILE_VIDEO` | no | `off` | Relay an avatar agent's video onto the Teams tile. `auto` = the agent participant; or a specific participant identity. `off` keeps StandIn's built-in animated avatar. |
+| `LIVEKIT_TILE_VIDEO_FPS` | no | `15` | Send rate for the relayed tile stream (frames/s). |
 | `MAX_CALL_MINUTES` | no | `0` (off) | Bridge-side hard cap per call; on expiry the agent is asked to say goodbye, then the call ends. |
 | `GOODBYE_TEXT` / `GOODBYE_GRACE_MS` | no | (default line) / `8000` | Goodbye wording (sent on `teams.goodbye`) and playout grace. The call ends `GOODBYE_GRACE_MS` + a fixed 500 ms scheduling buffer after the goodbye request. |
 | `PORT` / `BIND` | no | `8080` / `0.0.0.0` | Listen port / bind address. |

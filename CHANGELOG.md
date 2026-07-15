@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- **Avatar video relay graduated to a documented opt-in.** The
+  `LIVEKIT_TILE_VIDEO` relay (avatar agent's video onto the Teams tile) is now
+  verified end to end and documented in the README/`.env.example`; the config
+  docstring drops "EXPERIMENTAL". Default stays `off`.
+- `LIVEKIT_TILE_VIDEO_FPS` default raised 10 -> 15 to match the Teams tile rate
+  (10 starved the tile and stuttered). Only affects users who enable the relay.
+
 ## 0.2.1
 
 - fix(avatar-relay): subscribe to the avatar worker's video track directly

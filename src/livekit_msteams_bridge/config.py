@@ -30,10 +30,12 @@ class BridgeConfig:
     livekit_api_secret: str
     """LiveKit API secret paired with the key."""
     tile_video: str
-    """EXPERIMENTAL: relay the agent avatar's video track onto the Teams tile.
-    "off" (default) | "auto" (the agent participant) | a specific identity."""
+    """Relay the agent avatar's video track onto the Teams tile.
+    "off" (default) | "auto" (the agent participant) | a specific identity.
+    Opt-in: when set, the bridge subscribes to the agent's avatar video and
+    streams it to StandIn to paint on the caller's Teams tile."""
     tile_video_fps: float
-    """Send rate for the relayed tile stream (frames/s)."""
+    """Send rate for the relayed tile stream (frames/s). Default 15."""
     livekit_agent_name: str | None
     """Named agent for EXPLICIT dispatch (recommended by LiveKit): the agent
     registered with WorkerOptions.agent_name. None = rely on automatic dispatch
@@ -108,7 +110,7 @@ def load_config() -> BridgeConfig:
         livekit_api_key=_required("LIVEKIT_API_KEY"),
         livekit_api_secret=_required("LIVEKIT_API_SECRET"),
         tile_video=os.environ.get("LIVEKIT_TILE_VIDEO", "").strip() or "off",
-        tile_video_fps=_num_from_env("LIVEKIT_TILE_VIDEO_FPS", 10),
+        tile_video_fps=_num_from_env("LIVEKIT_TILE_VIDEO_FPS", 15),
         livekit_agent_name=_optional("LIVEKIT_AGENT_NAME"),
         livekit_room_prefix=os.environ.get("LIVEKIT_ROOM_PREFIX", "").strip() or "msteams-",
         livekit_delete_room_on_end=os.environ.get("LIVEKIT_DELETE_ROOM_ON_END") != "false",
