@@ -134,4 +134,4 @@ Your agent needs no Teams-specific code, but three integration points are availa
 
 ## License
 
-MIT (c) Alaaeldin Elhenawy
+MIT (c) Komaa DigiTech
