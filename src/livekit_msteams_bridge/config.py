@@ -31,9 +31,10 @@ class BridgeConfig:
     """LiveKit API secret paired with the key."""
     tile_video: str
     """Relay the agent avatar's video track onto the Teams tile.
-    "off" (default) | "auto" (the agent participant) | a specific identity.
-    Opt-in: when set, the bridge subscribes to the agent's avatar video and
-    streams it to StandIn to paint on the caller's Teams tile."""
+    "auto" (default; the agent participant) | "off" | a specific identity.
+    By default the bridge relays an avatar agent's video onto the caller's Teams
+    tile; set "off" to opt out. Voice-only agents are unaffected either way (they
+    publish no avatar video, so "auto" finds nothing to relay)."""
     tile_video_fps: float
     """Send rate for the relayed tile stream (frames/s). Default 15."""
     livekit_agent_name: str | None
@@ -109,7 +110,7 @@ def load_config() -> BridgeConfig:
         livekit_url=_required("LIVEKIT_URL"),
         livekit_api_key=_required("LIVEKIT_API_KEY"),
         livekit_api_secret=_required("LIVEKIT_API_SECRET"),
-        tile_video=os.environ.get("LIVEKIT_TILE_VIDEO", "").strip() or "off",
+        tile_video=os.environ.get("LIVEKIT_TILE_VIDEO", "").strip() or "auto",
         tile_video_fps=_num_from_env("LIVEKIT_TILE_VIDEO_FPS", 15),
         livekit_agent_name=_optional("LIVEKIT_AGENT_NAME"),
         livekit_room_prefix=os.environ.get("LIVEKIT_ROOM_PREFIX", "").strip() or "msteams-",
