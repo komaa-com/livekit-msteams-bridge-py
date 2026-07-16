@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "livekit-msteams-bridge"
-version = "0.3.2"
+version = "0.4.0"
 description = "Put a LiveKit Agent on Microsoft Teams voice/video calls. Terminates the StandIn media bridge wire protocol on one side and a LiveKit room on the other: per-call rooms, explicit agent dispatch, 16 kHz PCM relay, data-topic context, call governors."
 readme = "README.md"
 license = "MIT"

@@ -155,6 +155,16 @@ def start_video_relay(
             stream: Any = None
             last_send = 0.0
             try:
+                # Pacing parity with the Node sibling: both are latest-wins,
+                # fps-capped, and keep at most one encode in flight - but the
+                # mechanisms differ deliberately. Python self-caps inline on
+                # time.monotonic() inside this single VideoStream loop (the SDK's
+                # capacity=1 ring is the latest-wins slot). Node has no monotonic
+                # self-cap; it uses a fixed setInterval ticker plus an in-flight
+                # guard, fed by a separate drain loop. Behaviourally equivalent
+                # for the wire contract; aligning is unnecessary (AVATAR-VIDEO-
+                # RELAY-PLAN §4.3 parity note) - revisit only if a live call
+                # shows the rate-control divergence matters.
                 stream = rtc.VideoStream(track, format=rtc.VideoBufferType.RGB24, capacity=1)
                 async for ev in stream:
                     if state["stopped"]:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- **`LIVEKIT_TILE_VIDEO` now defaults to `auto`** (was `off`). Avatar agents show
+  their face on the Teams tile by default; set `off` to opt out. Voice-only
+  agents are unaffected (no avatar video to relay). Reverses the earlier opt-in
+  default per project decision. README + `.env.example` updated.
+- Document the deliberate Node/Python pacing-mechanism parity in `video_relay.py`
+  (monotonic self-cap vs fixed ticker; behaviourally equivalent).
+
 ## 0.3.0
 
 - **Avatar video relay graduated to a documented opt-in.** The
