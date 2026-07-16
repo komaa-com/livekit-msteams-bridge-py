@@ -7,7 +7,7 @@ Put a **LiveKit Agent** - including avatar agents - on **Microsoft Teams voice/v
 
 This is the Python sibling of [`@komaa/livekit-msteams-bridge`](https://www.npmjs.com/package/@komaa/livekit-msteams-bridge)
 (Node.js) - same wire contract, same environment variables, drop-in interchangeable behind the same
-`.env` file. It terminates the StandIn media bridge wire protocol on one side and a LiveKit room on
+`.env` file. The Node and Python packages version independently, so a version-number gap between them is expected; both implement the same StandIn wire protocol and interoperate with the hosted service identically. It terminates the StandIn media bridge wire protocol on one side and a LiveKit room on
 the other:
 
 - **One room per call**: the bridge creates a fresh room, joins as a participant, and dispatches
