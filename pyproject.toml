@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "livekit-msteams-bridge"
-version = "0.3.1"
+version = "0.3.2"
 description = "Put a LiveKit Agent on Microsoft Teams voice/video calls. Terminates the StandIn media bridge wire protocol on one side and a LiveKit room on the other: per-call rooms, explicit agent dispatch, 16 kHz PCM relay, data-topic context, call governors."
 readme = "README.md"
 license = "MIT"
-authors = [{ name = "Alaaeldin Elhenawy", email = "alaamh@outlook.com" }]
+authors = [{ name = "Komaa DigiTech" }]
 requires-python = ">=3.10"
 # livekit pins: tested against livekit 1.1.x / livekit-api 1.2.x; the rtc API
 # surface is verified by tests/test_livekit_sdk_surface.py on every CI run.
