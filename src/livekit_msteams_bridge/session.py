@@ -463,7 +463,10 @@ class CallSession:
         # Backpressure: only the bulky realtime frames are droppable; control
         # frames (pong, session.end, assistant.cancel) are tiny and
         # semantically load-bearing.
-        droppable = msg.get("type") in ("audio.frame", "display.image", "display.frame")
+        # display.frame (continuous avatar-video relay) stays droppable by design;
+        # display.image is a ONE-SHOT the agent is told succeeded, so dropping it
+        # would desync the agent's belief from what the caller sees (BRIDGE-4).
+        droppable = msg.get("type") in ("audio.frame", "display.frame")
         if droppable and self.worker.buffered_bytes > MAX_OUTBOUND_BUFFER_BYTES:
             self._dropped_frames += 1
             metric_inc("bridge_frames_dropped_total")
