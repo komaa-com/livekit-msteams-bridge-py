@@ -90,6 +90,13 @@ Everything is environment variables; names are identical to the Node package.
 | `MAX_CALL_MINUTES` | no | `0` (off) | Bridge-side hard cap per call; on expiry the agent is asked to say goodbye, then the call ends. |
 | `GOODBYE_TEXT` / `GOODBYE_GRACE_MS` | no | (default line) / `8000` | Goodbye wording (sent on `teams.goodbye`) and playout grace. The call ends `GOODBYE_GRACE_MS` + a fixed 500 ms scheduling buffer after the goodbye request. |
 | `PORT` / `BIND` | no | `8080` / `0.0.0.0` | Listen port / bind address. |
+
+> **`LIVEKIT_TILE_VIDEO` needs an outbound video tile on your StandIn connection.** The relay draws
+> onto the tile StandIn publishes into the call, so that tile has to exist: the connection needs its
+> avatar and video enabled. If it is off, this bridge streams perfectly valid frames and they are
+> discarded on arrival - the caller simply sees no video, and the bridge has no way to know. If your
+> agent publishes video, `LIVEKIT_TILE_VIDEO` is `auto`, and the caller still sees nothing, check that
+> setting on your StandIn connection first; recent worker builds log a one-time warning naming it.
 | `HMAC_FRESHNESS_MS` | no | `60000` | Two-sided freshness window: a timestamp up to 60 s in the past OR the future is accepted, and the replay guard holds a used handshake until the timestamp ages out. |
 | `MAX_CONNECTIONS` / `MAX_CONNECTIONS_PER_IP` | no | `64` / = total | Connection caps. |
 | `PRE_START_TIMEOUT_MS` | no | `10000` | Drop a worker that authenticates but never sends `session.start`. |
