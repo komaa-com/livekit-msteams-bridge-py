@@ -101,6 +101,24 @@ async def test_worker_ping_gets_pong():
     session.end_call("test-done")
 
 
+async def test_pong_ts_is_always_an_integer():
+    """The worker types pong.ts as a NON-NULLABLE integer.
+
+    Echoing msg.get("ts") straight back yields None when a ping arrives without one, and a null there
+    makes the whole pong fail to deserialize on arrival: the heartbeat reply vanishes with no error on
+    either side and the worker concludes the bridge is unresponsive. Same silent-drop class as the
+    sibling plugins' dropped `images` and `task_id` - a value the RECEIVING contract cannot represent,
+    discarded after being accepted.
+    """
+    for ping in ({"type": "ping"}, {"type": "ping", "ts": None}, {"type": "ping", "ts": "777"}):
+        session, worker, room, _ = make_session()
+        session.handle_worker_message(json.dumps(ping))
+        pongs = worker.of_type("pong")
+        assert pongs, f"no pong for {ping}"
+        assert isinstance(pongs[0]["ts"], int), f"pong.ts must be int, got {pongs[0]['ts']!r}"
+        session.end_call("test-done")
+
+
 async def test_participants_context_zero_says_nothing():
     session, worker, room, _ = make_session()
     session.handle_worker_message(start_msg())

@@ -245,7 +245,13 @@ class CallSession:
             elif self.session_started:
                 self._pending_audio.append(payload)  # deque drops the oldest at cap
         elif mtype == "ping":
-            self._send_to_worker({"type": "pong", "ts": msg.get("ts")})
+            # Coerce: the worker types pong.ts as a non-nullable integer, so echoing a missing or
+            # non-numeric ts as null makes the whole message fail to deserialize on arrival - the
+            # heartbeat reply silently vanishes and the worker sees an unresponsive bridge. Today's
+            # worker always stamps ts, so this is a latent path rather than a live break; coercing
+            # costs nothing and removes a way for a malformed ping to take the heartbeat down.
+            ts = msg.get("ts")
+            self._send_to_worker({"type": "pong", "ts": ts if isinstance(ts, int) else 0})
         elif mtype == "participants":
             count = msg.get("count")
             if isinstance(count, (int, float)):
