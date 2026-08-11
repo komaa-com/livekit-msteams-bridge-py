@@ -47,7 +47,11 @@ Issues = "https://github.com/komaa-com/livekit-msteams-bridge-py/issues"
 livekit-msteams-bridge = "livekit_msteams_bridge.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.4", "Pillow>=10"]
+# ruff is UPPER-BOUNDED on purpose. With a bare `ruff>=0.4`, CI lints against whatever ruff
+# released most recently: main was green on 2026-07-21 and the next run - three weeks later, on a
+# README-only change - failed with 86 findings in untouched source, because ruff 0.16 added rules.
+# A linter that can fail a build nobody changed is a clock, not a check. Raise this deliberately.
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.4,<0.13", "Pillow>=10"]
 avatar = ["Pillow>=10"]
 
 [tool.hatch.build.targets.sdist]

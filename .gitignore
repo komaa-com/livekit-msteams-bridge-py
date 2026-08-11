@@ -9,3 +9,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 .coverage
+
+# macOS finder junk (swept in once by a broad `git add -A`)
+.DS_Store
+**/.DS_Store
