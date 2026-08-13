@@ -3,8 +3,9 @@ import base64
 import json
 
 from livekit_msteams_bridge.session import MAX_OUTBOUND_BUFFER_BYTES, CallSession
+from livekit_msteams_bridge.vision import resolve_ambient_vision_config
 
-from conftest import FakeRoomPort, FakeWorkerPort, make_config, settle
+from conftest import FakeRoomPort, FakeWorkerPort, VisionlessRoomPort, make_config, settle
 
 
 def make_session(cfg=None, worker=None, room=None):
@@ -255,25 +256,120 @@ async def test_backpressure_drops_audio_keeps_control():
     session.end_call("test-done")
 
 
-async def test_video_frame_ignored():
+def video_frame(**kw) -> str:
+    msg = {
+        "type": "video.frame",
+        "source": "screenshare",
+        "ts": 42,
+        "width": 1280,
+        "height": 720,
+        "mime": "image/jpeg",
+        "dataBase64": "AAAA",
+        "participantName": "Sara",
+    }
+    msg.update(kw)
+    return json.dumps(msg)
+
+
+def vision_config(**over):
+    return make_config(ambient_vision=resolve_ambient_vision_config(enabled=True, **over))
+
+
+async def test_video_frame_ignored_when_ambient_vision_is_off():
+    """OFF by default: a worker that sends video must not make an unconfigured bridge spend."""
     session, worker, room, _ = make_session()
     session.handle_worker_message(start_msg())
     await settle()
-    session.handle_worker_message(
-        json.dumps(
-            {
-                "type": "video.frame",
-                "source": "camera",
-                "ts": 0,
-                "width": 1,
-                "height": 1,
-                "mime": "image/jpeg",
-                "dataBase64": "",
-            }
-        )
-    )
+    session.handle_worker_message(video_frame())
+    await settle()
+    assert room.vision == []
     assert not session.closed  # ignored, no crash
     session.end_call("test-done")
+
+
+async def test_ambient_vision_delivers_attributed_frames_once():
+    session, worker, room, _ = make_session(cfg=vision_config(require_recording_status=False))
+    session.handle_worker_message(start_msg())
+    await settle()
+    session.handle_worker_message(video_frame())
+    await settle()
+    assert len(room.vision) == 1
+    image = room.vision[0]
+    assert (image.source, image.owner, image.width, image.height, image.ts) == (
+        "screenshare",
+        "Sara's shared screen",
+        1280,
+        720,
+        42,
+    )
+    assert image.caption == "Live frame of Sara's shared screen."
+    assert image.data_base64 == "AAAA"  # relayed verbatim; the bridge never transcodes
+
+    session.handle_worker_message(video_frame())  # unchanged screen: not re-sent
+    await settle()
+    assert len(room.vision) == 1
+    session.end_call("test-done")
+
+
+async def test_recording_gate_holds_frames_and_never_surfaces_the_pre_recording_one():
+    session, worker, room, _ = make_session(cfg=vision_config())
+    session.handle_worker_message(start_msg())
+    await settle()
+    session.handle_worker_message(video_frame(dataBase64="BEFORE"))
+    await settle()
+    assert room.vision == []
+
+    session.handle_worker_message(json.dumps({"type": "recording.status", "status": "active"}))
+    await settle()
+    # the gate opening re-triggers delivery, but the withheld frame was never stored
+    assert room.vision == []
+
+    session.handle_worker_message(video_frame(dataBase64="AFTER"))
+    await settle()
+    assert [i.data_base64 for i in room.vision] == ["AFTER"]
+    session.end_call("test-done")
+
+
+async def test_vision_delivery_failure_leaves_the_frame_retryable():
+    session, worker, room, _ = make_session(cfg=vision_config(require_recording_status=False))
+    session.handle_worker_message(start_msg())
+    await settle()
+    room.fail_next_vision = True
+    session.handle_worker_message(video_frame())
+    await settle()
+    assert room.vision == []
+    session.handle_worker_message(video_frame())  # same bytes: not latched, so it retries
+    await settle()
+    assert len(room.vision) == 1
+    session.end_call("test-done")
+
+
+async def test_room_without_a_vision_route_disables_vision_only():
+    session, worker, room, _ = make_session(
+        cfg=vision_config(require_recording_status=False), room=VisionlessRoomPort()
+    )
+    session.handle_worker_message(start_msg())
+    await settle()
+    session.handle_worker_message(video_frame())
+    await settle()
+    assert not session.closed
+    # the rest of the call is unaffected
+    session.handle_worker_message(json.dumps({"type": "ping", "ts": 3}))
+    assert worker.of_type("pong")
+    session.end_call("test-done")
+
+
+async def test_teardown_releases_the_vision_state():
+    session, worker, room, _ = make_session(cfg=vision_config(require_recording_status=False))
+    session.handle_worker_message(start_msg())
+    await settle()
+    session.handle_worker_message(video_frame())
+    await settle()
+    session.end_call("test-done")
+    await settle()
+    # 1-2 MB of retained base64 plus a backstop task, freed on every completed call
+    assert session._vision.queued_count == 0
+    assert session._vision._latest == {}
 
 
 async def test_junk_frames_dropped():
@@ -357,3 +453,49 @@ async def test_display_frame_wire_shape():
     assert frame["dataBase64"] == "AQID"
     assert frame["width"] == 640
     assert frame["height"] == 360
+
+
+async def test_recording_status_before_session_start_is_not_downgraded():
+    """The ordering that silently disabled ambient vision on a live call.
+
+    recording.status and session.start arrived in the SAME millisecond, and session.start won.
+    Its recordingStatus is a setup-time snapshot - "unknown" on that call - so it flipped
+    _recording_active back to False, closing the media gate for the whole call. Ambient vision
+    then refused every frame WITHOUT logging, because refusing is correct when recording is off,
+    so the agent answered screen-share questions from nothing and it read as hallucination.
+    """
+    cfg = make_config(ambient_vision=resolve_ambient_vision_config(enabled=True, require_recording_status=True))
+    session, _worker, room, _c = make_session(cfg)
+
+    # the order that broke it: explicit status FIRST, then session.start with a stale snapshot
+    session.handle_worker_message(json.dumps({"type": "recording.status", "status": "active"}))
+    session.handle_worker_message(start_msg(recordingStatus="unknown"))
+    await settle()
+
+    assert session._recording_active is True, (
+        "session.start must not downgrade an explicit recording.status that already arrived"
+    )
+
+    session.handle_worker_message(
+        json.dumps(
+            {
+                "type": "video.frame",
+                "source": "screenshare",
+                "ts": 1,
+                "width": 8,
+                "height": 8,
+                "mime": "image/jpeg",
+                "dataBase64": base64.b64encode(b"x" * 32).decode(),
+            }
+        )
+    )
+    await settle()
+    assert room.vision, "a vision frame must be delivered once recording is active"
+
+
+async def test_session_start_still_seeds_recording_when_no_explicit_status():
+    """The seed path must survive the fix: with no recording.status, session.start still decides."""
+    session, _worker, _room, _c = make_session()
+    session.handle_worker_message(start_msg(recordingStatus="active"))
+    await settle()
+    assert session._recording_active is True

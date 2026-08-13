@@ -24,6 +24,7 @@ from .config import BridgeConfig
 from .log import Logger, logger
 from .metrics import metric_inc
 from .protocol import parse_worker_message, pcm16k_bytes_to_ms
+from .vision import AmbientVision, VisionImage
 
 # Pending caller-audio cap while the room connects: 250 x 20 ms = 5 s.
 MAX_PENDING_AUDIO_FRAMES = 250
@@ -58,7 +59,16 @@ class WorkerPort(Protocol):
 
 class AgentRoomPort(Protocol):
     """What the relay needs from the LiveKit side of a call. The real
-    implementation is LiveKitRoomPort (livekit_room.py); tests fake it."""
+    implementation is LiveKitRoomPort (livekit_room.py); tests fake it.
+
+    Two OPTIONAL capabilities are discovered with hasattr rather than declared here, so an older
+    or narrower room simply loses that one feature instead of failing to satisfy the port:
+
+      start_avatar_relay(sink)      - the experimental Teams-tile video relay
+      async send_vision(image)      - ambient vision; a room without it disables vision for that
+                                      call (one warning) and the call continues normally. It MUST
+                                      raise on failure, so the session can refund the vision budget.
+    """
 
     room_name: str
 
@@ -165,9 +175,35 @@ class CallSession:
         # Teams recording gate: nothing is persisted by this bridge, but the
         # state is tracked and surfaced to the agent as context.
         self._recording_active = False
+        # A recording.status message can arrive BEFORE session.start - on a real call both were
+        # stamped in the same millisecond. session.start carries its own recordingStatus, a
+        # setup-time snapshot that is usually "unknown"; letting it overwrite an explicit status
+        # that already arrived closes the media gate for the whole call. Ambient vision then
+        # refuses every frame SILENTLY, because refusing is the correct behaviour when recording
+        # is off - which is why this presents as hallucination rather than an error.
+        self._recording_status_explicit = False
 
         # EXPERIMENTAL avatar video relay (LIVEKIT_TILE_VIDEO): unwire on teardown
         self._stop_avatar_relay: Callable[[], None] | None = None
+
+        # ambient vision (AMBIENT_VISION)
+        # The room came up without a send_vision route; ambient vision is off for this call.
+        self._vision_unavailable = False
+        self._logged_vision_off = False
+        self._vision = AmbientVision(
+            call_id=call_id,
+            config=cfg.ambient_vision,
+            log=self.log,
+            # Teams Media Access obligation: do not even STORE call media before recording is active.
+            media_permitted=lambda: (
+                not self.closed
+                and not self._vision_unavailable
+                and (not cfg.ambient_vision.require_recording_status or self._recording_active)
+            ),
+            sink_ready=lambda: self.room is not None and not self._vision_unavailable,
+            deliver=self._deliver_vision,
+            now=_now_ms,
+        )
 
         # governors
         self._governor_handle: asyncio.TimerHandle | None = None
@@ -271,6 +307,7 @@ class CallSession:
             self.log.info(f"recording.status = {msg.get('status')}")
             # surface the compliance-relevant state change to the agent so it can
             # disclose/adjust ("this call is being recorded")
+            self._recording_status_explicit = True
             if active != self._recording_active:
                 self._recording_active = active
                 self._push_context(
@@ -278,10 +315,19 @@ class CallSession:
                     if active
                     else "The Microsoft Teams call recording is not active."
                 )
+                # The media gate may have just opened on a screen that has not changed since, and a
+                # static screen sends no new frame to re-trigger delivery.
+                self._vision.flush()
         elif mtype == "video.frame":
-            # The Teams tile is rendered by the worker's own avatar; inbound video
-            # to the agent is a future feature (publish as a room video track).
-            self.log.debug("video.frame ignored (no room video publish in v1)")
+            # Ambient vision: the newest screen-share / camera frame becomes labelled context for
+            # the agent's next natural turn. Opt-in (AMBIENT_VISION) and a no-op when off, so the
+            # default call still costs nothing.
+            if self.cfg.ambient_vision.enabled:
+                self._vision.offer(msg)
+            elif not self._logged_vision_off:
+                # Once per call, not once per frame: a screen-share is 1-2 frames a second.
+                self._logged_vision_off = True
+                self.log.debug("video.frame received but AMBIENT_VISION is off; ignoring inbound video")
         elif mtype == "assistant.say":
             # worker-side governor: ask the agent to speak, the worker tears down
             # after. An empty text would ask the agent to say nothing - fall back
@@ -324,7 +370,10 @@ class CallSession:
         direction = msg.get("direction") or "inbound"
         recording = msg.get("recordingStatus") or "unknown"
         self.log.info(f"session.start (direction={direction}, recording={recording})")
-        self._recording_active = recording == "active"
+        # Seed from session.start ONLY when no explicit recording.status has been seen: its value
+        # is a setup-time snapshot and must never downgrade a live one that already arrived.
+        if not self._recording_status_explicit:
+            self._recording_active = recording == "active"
 
         # Dispatch metadata: nullable caller fields are defaulted, never null; the
         # AAD id is included only when Teams provides one (per-person, never shared).
@@ -377,6 +426,18 @@ class CallSession:
             room.send_context(self._pending_context.popleft())
         self.log.info(f'LiveKit room "{room.room_name}" relaying')
 
+        if self.cfg.ambient_vision.enabled:
+            if not hasattr(room, "send_vision"):
+                # No delivery route: say so once and stop collecting, rather than filling the
+                # fallback queue on every frame for a call that can never drain it.
+                self._vision_unavailable = True
+                self.log.warn(
+                    "AMBIENT_VISION is on but this room has no send_vision route; ambient vision disabled for this call"
+                )
+            else:
+                # The room is the delivery route, so anything held while it connected can go now.
+                self._vision.flush()
+
         # EXPERIMENTAL: avatar video relay onto the Teams tile (default off).
         # Optional on the port protocol; fakes without it simply skip the feature.
         if self.cfg.tile_video != "off" and hasattr(room, "start_avatar_relay"):
@@ -402,6 +463,18 @@ class CallSession:
         except Exception:
             pass
 
+    # ---- ambient vision ----
+
+    async def _deliver_vision(self, image: VisionImage) -> None:
+        """Hand one image to the agent through the room. Raises so the budget is refunded on
+        failure - a swallowed error would spend the slot and lose the frame."""
+        room = self.room
+        if room is None or not hasattr(room, "send_vision"):
+            raise RuntimeError("no room vision route")
+        await room.send_vision(image)
+        # Only after a successful publish: the counter measures delivery, not attempts.
+        metric_inc("bridge_vision_frames_sent_total")
+
     def _push_context(self, text: str) -> None:
         if self.room is not None:
             self.room.send_context(text)
@@ -425,13 +498,13 @@ class CallSession:
         )
 
     def _perform_goodbye(self, text: str) -> None:
-        """Ask the agent to say the goodbye (data topic "teams.goodbye"; the
+        """Ask the agent to say the goodbye (data topic "msteams.goodbye"; the
         agent implements the actual speech - there is no bridge-side TTS on the
         room transport). Both governors funnel here; first one wins. The
         worker-side playback is flushed first (assistant.cancel) so Teams-side
         buffered agent audio cannot eat the grace window; whether the AGENT
         interrupts its own in-flight turn to speak the goodbye is the agent's
-        choice (see the example agents' teams.goodbye handler)."""
+        choice (see the example agents' msteams.goodbye handler)."""
         if self._goodbye_in_progress:
             self.log.info("goodbye already in progress; ignoring duplicate")
             return
@@ -511,6 +584,9 @@ class CallSession:
         self._goodbye_handle = None
         if self._idle_task and not self._idle_task.done():
             self._idle_task.cancel()
+        # Per-call vision state is 1-2 MB of retained base64 plus a backstop task; not releasing it
+        # leaks for the process lifetime on every completed call.
+        self._vision.release()
         if self._stop_avatar_relay is not None:
             try:
                 self._stop_avatar_relay()

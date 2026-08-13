@@ -1,5 +1,5 @@
 """Worker-facing WebSocket server. The StandIn media bridge dials
-{wsBaseUrl}/{callId} with an HMAC-signed upgrade
+{wsBaseUrl}{WS_PATH}/{callId} with an HMAC-signed upgrade
 (X-OpenClawTeamsBridge-Timestamp / -Signature over "{timestampMs}.{callId}").
 
 DoS guards - parity with the OpenClaw/Hermes msteams providers. A single shared
@@ -44,15 +44,45 @@ DEFAULT_PRE_START_TIMEOUT_MS = 10_000
 # Bounded window for queued session.end frames + close handshakes to flush on shutdown.
 SHUTDOWN_GRACE_S = 2.0
 
+# Mirrors config.py. Duplicated deliberately: server.py must not import config for one constant.
+DEFAULT_WS_PATH = "/msteams/calling"
 
-def call_id_from_path(path: str | None) -> str | None:
-    """callId = last non-empty path segment of the upgrade URL."""
+
+def call_id_from_path(path: str | None, base_path: str) -> str | None:
+    """callId = the single segment directly under `base_path`, i.e. `{base_path}/{callId}`.
+
+    `base_path` is REQUIRED. Previously any path worked because only the last segment was read, so
+    the bridge answered on every route - including ones a co-hosted service (a future official
+    LiveKit integration, say) will want. Anchoring on the base path means an unrelated URL is
+    rejected before authentication rather than treated as a call whose id happens to be that URL's
+    last segment.
+
+    Pass the RAW request path (aiohttp's `request.raw_path`), not `request.path`: the latter is
+    already percent-decoded, and decoding twice would split a callId containing `%2F` into two
+    segments that this function then rejects.
+    """
     if not path:
         return None
-    segments = [s for s in path.split("?")[0].split("/") if s]
-    if not segments:
+    raw = path.split("?")[0]
+    # Defensive: this runs in the PRE-AUTH upgrade path, where an exception answers an
+    # unauthenticated probe with a 500 instead of the 401 it has earned. A config that somehow
+    # lacks ws_path must degrade to the default, never raise.
+    base = (base_path or DEFAULT_WS_PATH).rstrip("/")
+    # The trailing "/" in the prefix test is what stops "/msteams/callingX/y" from matching.
+    if raw != base and not raw.startswith(f"{base}/"):
         return None
-    return unquote(segments[-1])
+    segments = [s for s in raw[len(base) :].split("/") if s]
+    # Exactly one segment under the base: {base}/{callId}. Deeper paths are not ours.
+    if len(segments) != 1:
+        return None
+    # Decode AFTER the split, so an encoded slash is one callId and cannot traverse.
+    #
+    # DIVERGENCE from the Node sibling, where decodeURIComponent throws URIError on a malformed
+    # escape and the callId is rejected: Python's unquote never raises and leaves "%zz" as "%zz",
+    # so such a callId authenticates here if the worker signed that exact string. Kept on purpose -
+    # the callId is HMAC-bound and livekit_room sanitizes it out of the room name, so a bespoke
+    # percent-escape validator would only add a way for this pre-auth path to fail.
+    return unquote(segments[0])
 
 
 class ReplayGuard:
@@ -89,13 +119,17 @@ def authorize_upgrade(
     headers: Mapping[str, str],
     replay: ReplayGuard | None = None,
 ) -> dict[str, str]:
-    """Validate an upgrade request. Returns {"callId": ...} or {"error": ...}."""
-    call_id = call_id_from_path(path)
+    """Validate an upgrade request. Returns {"callId": ...} or {"error": ...}.
+
+    `path` is the RAW request path (`request.raw_path`); see call_id_from_path."""
+    call_id = call_id_from_path(path, cfg.ws_path)
     if not call_id:
-        return {"error": "no callId in path"}
+        # A log contract only: the client sees a bare 401 with no body, so naming the expected
+        # shape here is how an operator finds a misconfigured StandIn identity URL.
+        return {"error": f"expected {cfg.ws_path}/{{callId}}"}
     # Fail closed: an empty/unset shared secret must reject every upgrade rather
     # than authenticating anyone. load_config() requires it, but never trust that.
-    if not cfg.worker_shared_secret:
+    if not cfg.bridge_secret:
         return {"error": "bridge shared secret is not configured"}
     ts_header = (
         headers.get(TIMESTAMP_HEADER)
@@ -119,7 +153,7 @@ def authorize_upgrade(
         return {"error": "stale or missing timestamp"}
     # The worker signs with the integer millisecond timestamp exactly as sent.
     ts_str = ts_header.strip()
-    if not verify(cfg.worker_shared_secret, ts_str, call_id, sig):
+    if not verify(cfg.bridge_secret, ts_str, call_id, sig):
         return {"error": "bad signature"}
     # Replay guard runs LAST, so an unauthenticated probe can never consume a
     # replay slot (it fails the signature check first).
@@ -260,7 +294,9 @@ class BridgeServer:
             metric_inc("bridge_upgrades_rejected_cap_total")
             log.warn(f"rejected upgrade from {ip}: per-IP connection cap reached")
             return web.Response(status=503)
-        auth = authorize_upgrade(self.cfg, request.path, request.headers, self._replay)
+        # raw_path, not path: aiohttp has already percent-decoded `path`, and decoding twice turns
+        # a callId containing %2F into two segments that path anchoring then rejects.
+        auth = authorize_upgrade(self.cfg, request.raw_path, request.headers, self._replay)
         if "error" in auth:
             metric_inc("bridge_upgrades_rejected_auth_total")
             log.warn(f"rejected upgrade from {ip}: {auth['error']}")
@@ -374,7 +410,7 @@ class BridgeServer:
         site = web.TCPSite(self._runner, self.cfg.host, self.cfg.port, ssl_context=ssl_ctx)
         await site.start()
         log.info(
-            f"livekit-msteams-bridge listening on {self.cfg.host}:{self.cfg.port} "
+            f"livekit-msteams-bridge listening on {self.cfg.host}:{self.cfg.port}{self.cfg.ws_path}/{{callId}} "
             f"(LiveKit {self.cfg.livekit_url}, agent {self.cfg.livekit_agent_name or '<automatic dispatch>'})"
         )
 

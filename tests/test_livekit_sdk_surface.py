@@ -31,6 +31,23 @@ def test_rtc_room_surface():
     assert hasattr(rtc.TrackKind, "KIND_AUDIO")
 
 
+def test_rtc_byte_stream_surface():
+    """Ambient vision publishes an image as a BYTE STREAM (a data packet is capped far below a
+    screen-share JPEG). A LiveKit rename here must fail in CI rather than leave a feature that
+    collects frames and silently delivers none."""
+    sig = inspect.signature(rtc.LocalParticipant.stream_bytes)
+    assert "name" in sig.parameters
+    for param in ("total_size", "mime_type", "attributes", "topic"):
+        assert param in sig.parameters, f"LocalParticipant.stream_bytes lost {param}="
+    assert inspect.iscoroutinefunction(rtc.ByteStreamWriter.write)
+    assert inspect.iscoroutinefunction(rtc.ByteStreamWriter.aclose)
+    # the receiving half both example workers use
+    assert hasattr(rtc.Room, "register_byte_stream_handler")
+    for field in ("mime_type", "attributes", "size", "name", "topic"):
+        assert field in rtc.ByteStreamInfo.__dataclass_fields__, f"ByteStreamInfo lost {field}"
+    assert hasattr(rtc.ByteStreamReader, "__anext__")
+
+
 def test_api_surface():
     token = (
         api.AccessToken("k", "s" * 32)

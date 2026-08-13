@@ -19,7 +19,7 @@ ruff format --check src tests
 
 - Runtime dependencies: `aiohttp` plus the official `livekit` / `livekit-api` SDKs (pinned to the tested 1.x range; `tests/test_livekit_sdk_surface.py` guards the API surface against drift).
 - CI runs ruff + the test suite on Python **3.10 through 3.13** for every push and PR.
-- Releases are tagged `v*` and published to PyPI by CI via trusted publishing - the tag must match the `pyproject.toml` version. See `CHANGELOG.md` for the stability notes.
+- Releases are tagged `v*` and published to PyPI by CI via trusted publishing - the tag must match the `pyproject.toml` version.
 - **Docs live in `website/`** (this site). Any merged change to `website/` redeploys the site automatically.
 
 ## Parity with the Node.js sibling

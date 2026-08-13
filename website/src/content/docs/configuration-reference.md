@@ -9,7 +9,7 @@ The bridge is configured entirely from environment variables - the same names as
 
 | Env | Meaning |
 |---|---|
-| `WORKER_SHARED_SECRET` | The shared secret from StandIn pairing. Must equal what StandIn holds, or the HMAC upgrade is rejected with `401`. |
+| `BRIDGE_SECRET` | The shared secret from StandIn pairing. Must equal what StandIn holds, or the HMAC upgrade is rejected with `401`. |
 | `LIVEKIT_URL` | LiveKit server URL (`wss://<project>.livekit.cloud` or self-hosted). |
 | `LIVEKIT_API_KEY` | LiveKit API key; mints join tokens, dispatches agents, deletes rooms. Server-side only. |
 | `LIVEKIT_API_SECRET` | LiveKit API secret paired with the key. |
@@ -27,8 +27,20 @@ The bridge is configured entirely from environment variables - the same names as
 | Env | Default | Meaning |
 |---|---|---|
 | `MAX_CALL_MINUTES` | `0` (off) | Bridge-side hard cap per call, in minutes (fractional allowed). |
-| `GOODBYE_TEXT` | a default line | The goodbye line sent to the agent on `teams.goodbye`. |
+| `GOODBYE_TEXT` | a default line | The goodbye line sent to the agent on `msteams.goodbye`. |
 | `GOODBYE_GRACE_MS` | `8000` | How long the agent gets to speak the goodbye before `session.end`. The call ends this grace + a fixed 500 ms scheduling buffer after the request. |
+
+## Ambient vision
+
+Continuous visual awareness of the call: the newest frame of each participant's screen-share and camera is published to the agent on the `msteams.vision` byte stream, attributed with whose screen it is. The agent uses it as context on its next natural turn - it never triggers speech.
+
+| Env | Default | Meaning |
+|---|---|---|
+| `AMBIENT_VISION` | `false` | Master switch. **Off by default**: this is the knob that costs money per frame, so a bridge nobody configured never starts spending because a worker happened to send video. |
+| `MAX_VISION_PER_MINUTE` | `30` | Per-call spend cap over a sliding 60 s window. **`0` DISABLES** - note the sibling OpenClaw plugin reads `0` as *unlimited*; that inversion is deliberately not carried over, because `AMBIENT_VISION` is already the on-switch. Use a large number for "effectively unlimited". |
+| `REQUIRE_RECORDING_STATUS` | `true` | Hold frames until Teams reports the call recording as active (Media Access obligation). Frames are not even **stored** before then, so nothing captured beforehand can surface later. |
+
+Only CHANGED frames are sent (a frozen screen costs nothing), screen-share is tried before camera so a tight budget spends its last slot on the screen, and a failed publish refunds the slot and leaves the frame retryable. Booleans here are strict: `REQUIRE_RECORDING_STATUS=yes` stops startup rather than quietly disabling the gate.
 
 ## Server and transport
 
@@ -36,6 +48,7 @@ The bridge is configured entirely from environment variables - the same names as
 |---|---|---|
 | `PORT` | `8080` | TCP port the bridge listens on. |
 | `BIND` | `0.0.0.0` | Bind address. |
+| `WS_PATH` | `/msteams/calling` | Base path the worker WebSocket is anchored on; a call dials `{WS_PATH}/{callId}` and nothing else is accepted (a foreign path is a `401`, before authentication). Same default as the OpenClaw and Hermes plugins, so one StandIn identity URL shape works for every backend. `/healthz` and `/metrics` stay at the root. An empty value stops startup. |
 | `TLS_CERT_PATH` / `TLS_KEY_PATH` | unset | PEM cert/key for native TLS (`wss`). When both are set the bridge serves TLS itself; otherwise front the plain WS with a TLS terminator. |
 | `HMAC_FRESHNESS_MS` | `60000` | Two-sided freshness window: a timestamp up to 60 s in the past OR the future is accepted; the replay guard holds a used handshake until the timestamp ages out. |
 | `MAX_CONNECTIONS` | `0` (= 64) | Max concurrent connections. |
@@ -45,7 +58,7 @@ The bridge is configured entirely from environment variables - the same names as
 | `WORKER_IDLE_TIMEOUT_MS` | `0` (= 90000) | Dead-peer window: end the call after this long without any worker message (the worker heartbeats every 30 s). Frees the call id for reconnect and ends the agent job. |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. An invalid value falls back to `info`. |
 
-The bridge also exposes `GET /metrics` (Prometheus text format, no auth): calls total/active, call seconds, upgrade rejections by cause, frames relayed each way, backpressure drops, room connect failures, governor fires, goodbye requests, unparseable frames, and callid mismatches. Like `GET /healthz` it is served on the same port - keep the port private to your network or scrape through your ingress.
+The bridge also exposes `GET /metrics` (Prometheus text format, no auth): calls total/active, call seconds, upgrade rejections by cause, frames relayed each way, ambient-vision images delivered, backpressure drops, room connect failures, governor fires, goodbye requests, unparseable frames, and callid mismatches. Like `GET /healthz` it is served on the same port - keep the port private to your network or scrape through your ingress.
 
 :::note
 Numeric variables **fail loud**: `MAX_CALL_MINUTES=abc` (or a negative value) stops startup with a clear error rather than silently disabling the governor, and a non-numeric `PORT` stops with a clear message instead of an opaque listen error.

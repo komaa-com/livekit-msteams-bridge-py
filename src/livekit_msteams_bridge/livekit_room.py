@@ -24,13 +24,19 @@ from livekit import api, rtc
 from .config import BridgeConfig
 from .video_relay import start_video_relay
 from .log import Logger
+from .vision import VisionImage
 
 SAMPLE_RATE = 16_000
 NUM_CHANNELS = 1
 
 # Data topics the agent can listen on (documented in the README).
-TOPIC_CONTEXT = "teams.context"
-TOPIC_GOODBYE = "teams.goodbye"
+TOPIC_CONTEXT = "msteams.context"
+TOPIC_GOODBYE = "msteams.goodbye"
+# Ambient vision images. A byte STREAM, not a data packet: a screen-share JPEG is far larger than a
+# LiveKit data packet may be, and stream_bytes chunks it for us. Agents read it with
+# room.register_byte_stream_handler("msteams.vision", ...); the attribution rides in the stream's
+# attributes so a handler never has to parse the image to know whose screen it is.
+TOPIC_VISION = "msteams.vision"
 
 _SAFE_CALL_ID = re.compile(r"[^A-Za-z0-9._@:-]")
 
@@ -276,12 +282,48 @@ class LiveKitRoomPort:
         asyncio.ensure_future(send())
 
     def send_context(self, text: str) -> None:
-        """Non-interrupting context for the agent (data topic "teams.context")."""
+        """Non-interrupting context for the agent (data topic "msteams.context")."""
         self._publish_data(text, TOPIC_CONTEXT)
 
     def send_goodbye(self, text: str) -> None:
-        """Governor goodbye request for the agent (data topic "teams.goodbye")."""
+        """Governor goodbye request for the agent (data topic "msteams.goodbye")."""
         self._publish_data(text, TOPIC_GOODBYE)
+
+    async def send_vision(self, image: VisionImage) -> None:
+        """Hand the agent one attributed picture of the caller's screen or camera.
+
+        The image rides as BYTES, not base64-in-JSON: a data packet is capped well below a
+        screen-share frame, and stream_bytes chunks the payload for us. Raising (rather than
+        swallowing) a failure is load-bearing - it is what refunds the per-call vision budget."""
+        room = self._room
+        if room is None or self._closed:
+            raise RuntimeError("room is closed")
+        data = base64.b64decode(image.data_base64)
+        writer = await room.local_participant.stream_bytes(
+            f"{image.source}-{image.ts}",
+            total_size=len(data),
+            mime_type=image.mime,
+            attributes={
+                "source": image.source,
+                "owner": image.owner,
+                "caption": image.caption,
+                "width": str(image.width),
+                "height": str(image.height),
+                "ts": str(image.ts),
+            },
+            topic=TOPIC_VISION,
+        )
+        try:
+            await writer.write(data)
+        except Exception:
+            # Close the half-open stream before propagating, or the reader on the agent side waits
+            # for chunks that will never come.
+            try:
+                await writer.aclose()
+            except Exception:
+                pass
+            raise
+        await writer.aclose()
 
     async def close(self) -> None:
         """Leave (and by default delete) the room."""

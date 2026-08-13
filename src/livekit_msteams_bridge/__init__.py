@@ -17,11 +17,13 @@ from .metrics import render_metrics, reset_metrics
 from .protocol import parse_worker_message, pcm16k_bytes_to_ms
 from .server import BridgeServer, ReplayGuard, authorize_upgrade, call_id_from_path, start_server
 from .session import AgentRoomPort, CallSession, RoomConnector, RoomHandlers, WorkerPort
+from .vision import AmbientVisionConfig, VisionImage
 
 __version__ = "0.1.0"
 
 __all__ = [
     "AgentRoomPort",
+    "AmbientVisionConfig",
     "BridgeConfig",
     "BridgeServer",
     "CallSession",
@@ -31,6 +33,7 @@ __all__ = [
     "RoomHandlers",
     "SIGNATURE_HEADER",
     "TIMESTAMP_HEADER",
+    "VisionImage",
     "WorkerPort",
     "__version__",
     "authorize_upgrade",
@@ -51,8 +54,9 @@ __all__ = [
 from .livekit_room import (  # noqa: E402  (after __all__ on purpose)
     TOPIC_CONTEXT,
     TOPIC_GOODBYE,
+    TOPIC_VISION,
     LiveKitRoomPort,
     connect_livekit_room,
 )
 
-__all__ += ["TOPIC_CONTEXT", "TOPIC_GOODBYE", "LiveKitRoomPort", "connect_livekit_room"]
+__all__ += ["TOPIC_CONTEXT", "TOPIC_GOODBYE", "TOPIC_VISION", "LiveKitRoomPort", "connect_livekit_room"]
