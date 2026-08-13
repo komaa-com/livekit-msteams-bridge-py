@@ -464,9 +464,7 @@ async def test_recording_status_before_session_start_is_not_downgraded():
     then refused every frame WITHOUT logging, because refusing is correct when recording is off,
     so the agent answered screen-share questions from nothing and it read as hallucination.
     """
-    cfg = make_config(
-        ambient_vision=resolve_ambient_vision_config(enabled=True, require_recording_status=True)
-    )
+    cfg = make_config(ambient_vision=resolve_ambient_vision_config(enabled=True, require_recording_status=True))
     session, _worker, room, _c = make_session(cfg)
 
     # the order that broke it: explicit status FIRST, then session.start with a stale snapshot
