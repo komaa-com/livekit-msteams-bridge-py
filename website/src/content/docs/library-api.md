@@ -75,8 +75,9 @@ Wire messages are plain dicts (they arrive and leave as JSON). `parse_worker_mes
 
 ## Also exported
 
-- `authorize_upgrade`, `call_id_from_path`, `ReplayGuard` - the upgrade-authorization primitives.
+- `authorize_upgrade`, `call_id_from_path`, `ReplayGuard` - the upgrade-authorization primitives. `call_id_from_path(path, base_path)` takes the base path explicitly (pass `cfg.ws_path`) and returns the single segment under it, or `None` for any other route; feed it aiohttp's `request.raw_path`, since `request.path` is already percent-decoded.
 - `CallSession`, `WorkerPort`, `AgentRoomPort`, `RoomConnector`, `RoomHandlers` - the per-call relay class and its transport protocols (advanced embedding).
-- `LiveKitRoomPort`, `connect_livekit_room`, `TOPIC_CONTEXT`, `TOPIC_GOODBYE` - the real room connector and the data-topic names.
+- `LiveKitRoomPort`, `connect_livekit_room`, `TOPIC_CONTEXT`, `TOPIC_GOODBYE`, `TOPIC_VISION` - the real room connector and the data-topic names.
+- `AmbientVisionConfig`, `VisionImage` - the ambient-vision config block on `BridgeConfig.ambient_vision` and the attributed image handed to `AgentRoomPort.send_vision`.
 - `load_dotenv` - the tiny `.env` loader the CLI uses.
 - `render_metrics`, `reset_metrics`, `logger` - metrics text, the test-isolation reset, and the minimal leveled logger.

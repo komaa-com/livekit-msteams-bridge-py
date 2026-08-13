@@ -39,11 +39,11 @@ Audio on the wire is base64 **PCM 16 kHz, 16-bit, mono**.
 | `session.start` | `callId`, `threadId`, `caller{aadId?, displayName?, tenantId?}`, `recordingStatus?`, `direction?` | Create the room, dispatch the agent with caller metadata, publish the caller-audio track. All caller fields are nullable and are defaulted, never sent as null. |
 | `audio.frame` | `seq`, `timestampMs`, `payloadBase64`, `speakerName?` | Publish the PCM into the room via `AudioSource.capture_frame`. Buffered (bounded, ~5 s) while the room is still connecting. |
 | `video.frame` | `source`, `ts`, `width`, `height`, `mime`, `dataBase64`, ... | Ignored in v1 (the Teams tile is rendered by the worker's own avatar; publishing caller video into the room is on the roadmap). |
-| `participants` | `count` | `teams.context` data message ("1:1 call" / "N humans, stay quiet unless addressed"). A count of 0 says nothing. |
-| `dtmf` | `digit` | `teams.context` data message ("the caller pressed {digit}"). |
+| `participants` | `count` | `msteams.context` data message ("1:1 call" / "N humans, stay quiet unless addressed"). A count of 0 says nothing. |
+| `dtmf` | `digit` | `msteams.context` data message ("the caller pressed {digit}"). |
 | `ping` | `ts` | Reply `pong` with the same `ts`. |
-| `recording.status` | `status` | On state change, a `teams.context` message ("recording is now ACTIVE" / "not active") so the agent can disclose. |
-| `assistant.say` | `text` | Governor goodbye: forwarded to the agent on `teams.goodbye` (empty text falls back to `GOODBYE_TEXT`), then StandIn tears the call down. |
+| `recording.status` | `status` | On state change, a `msteams.context` message ("recording is now ACTIVE" / "not active") so the agent can disclose. |
+| `assistant.say` | `text` | Governor goodbye: forwarded to the agent on `msteams.goodbye` (empty text falls back to `GOODBYE_TEXT`), then StandIn tears the call down. |
 | `session.end` | `reason` | Leave + delete the room, tear down. |
 
 ## Bridge to worker
@@ -65,5 +65,6 @@ Audio on the wire is base64 **PCM 16 kHz, 16-bit, mono**.
 | `track_unsubscribed` | Re-arm the pump so a re-published agent track (avatar swaps) keeps playing. |
 | `participant_disconnected` | Only the bound agent leaving ends the call. |
 | `disconnected` | Final (the SDK retries transient drops internally first): end the call. |
-| `publish_data` (`teams.context` / `teams.goodbye`) | Reliable data messages carrying `{"text": "..."}`. |
+| `publish_data` (`msteams.context` / `msteams.goodbye`) | Reliable data messages carrying `{"text": "..."}`. |
+| `stream_bytes` (`msteams.vision`) | Ambient-vision images, when `AMBIENT_VISION=true`: a byte stream per image (a data packet is capped far below a screen-share JPEG), with `source` / `owner` / `caption` / `width` / `height` / `ts` in the stream attributes. |
 | `delete_room` at teardown | Ends the agent job immediately (`LIVEKIT_DELETE_ROOM_ON_END=true`). |

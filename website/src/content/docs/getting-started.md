@@ -10,7 +10,7 @@ By the end of this page a LiveKit agent answers a Microsoft Teams call. You need
 A LiveKit call needs **two** processes: your agent runs as a worker, and the bridge dispatches it into a per-call room. Register the worker under an agent name:
 
 ```python
-cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="standin-voice-agent"))
+cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name="standin-agent"))
 ```
 
 Any existing LiveKit agent works unchanged - or start from the ready-made examples (a minimal voice pipeline and a bitHuman avatar) referenced in [Run the Example](/livekit-msteams-bridge-py/example/).
@@ -27,8 +27,8 @@ As a CLI:
 LIVEKIT_URL=wss://your-project.livekit.cloud \
 LIVEKIT_API_KEY=API... \
 LIVEKIT_API_SECRET=... \
-LIVEKIT_AGENT_NAME=standin-voice-agent \
-WORKER_SHARED_SECRET=... \
+LIVEKIT_AGENT_NAME=standin-agent \
+BRIDGE_SECRET=... \
   livekit-msteams-bridge
 ```
 
@@ -51,14 +51,14 @@ asyncio.run(main())
 
 Every option is an environment variable; the package ships a fully commented [`.env.example`](https://github.com/komaa-com/livekit-msteams-bridge-py/blob/main/.env.example), and the [Configuration Reference](/livekit-msteams-bridge-py/configuration-reference/) documents each one. The bridge listens on `0.0.0.0:8080` by default and exposes `GET /healthz` for liveness checks.
 
-`WORKER_SHARED_SECRET` comes from StandIn in the next step.
+`BRIDGE_SECRET` comes from StandIn in the next step.
 
 ## 3. Connect a StandIn identity
 
 StandIn is the hosted service that joins the Teams call and dials into your bridge. Pick a tier at [standin.komaa.com](https://standin.komaa.com) (sandbox for an instant trial), pair, and you get a **shared secret**.
 
-1. Put the secret in `WORKER_SHARED_SECRET` (both sides must match exactly).
-2. Point the identity's **agent WebSocket URL** at your bridge, for example `wss://lk-bridge.example.com:8080/voice/msteams/stream`. StandIn appends `/{callId}` per call.
+1. Put the secret in `BRIDGE_SECRET` (both sides must match exactly).
+2. Point the identity's **agent WebSocket URL** at your bridge, for example `wss://lk-bridge.example.com:8080/msteams/calling`. StandIn appends `/{callId}` per call. The bridge answers only under that base path (`WS_PATH`).
 3. Restart the bridge if you changed the env.
 
 StandIn dials in **from the internet**, so a laptop or private host needs a public URL. A tunnel gives you one and terminates TLS (so you get `wss://` for free). Run one pointing at port `8080`:
@@ -93,7 +93,7 @@ Call your Teams bot (or join the sandbox meeting). In the bridge logs you should
 INFO  [server] worker connected for call 19:meeting_ab... (1/64)
 INFO  [call:19:meeting_ab] session.start (direction=inbound, recording=unknown)
 INFO  [call:19:meeting_ab] LiveKit room "msteams-19-meeting_ab..." joined
-INFO  [call:19:meeting_ab] agent "standin-voice-agent" dispatched
+INFO  [call:19:meeting_ab] agent "standin-agent" dispatched
 INFO  [call:19:meeting_ab] LiveKit room "msteams-19-meeting_ab..." relaying
 ```
 

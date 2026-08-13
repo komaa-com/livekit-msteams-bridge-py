@@ -17,7 +17,7 @@ from livekit_msteams_bridge import load_config, load_dotenv, start_server
 async def main() -> None:
     cfg = load_config()
     server = await start_server(cfg)
-    print(f"Point your StandIn identity's agent WebSocket URL at ws://<this-host>:{cfg.port}/voice/msteams/stream")
+    print(f"Point your StandIn identity's agent WebSocket URL at ws://<this-host>:{cfg.port}{cfg.ws_path}")
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()

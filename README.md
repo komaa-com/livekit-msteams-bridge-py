@@ -15,8 +15,9 @@ the other:
 - **No transcoding on our side**: the worker speaks 16 kHz mono PCM16 natively; the room side uses
   the SDK's resampling `AudioSource`/`AudioStream`, so the bridge itself never transcodes.
 - **Agent integration without Teams code**: per-call metadata (`ctx.job.metadata` - caller name,
-  tenant, direction, AAD id when known) plus two data topics: `teams.context` (participants, DTMF,
-  recording state) and `teams.goodbye` (the governor's goodbye line to speak).
+  tenant, direction, AAD id when known) plus three data topics: `msteams.context` (participants, DTMF,
+  recording state), `msteams.goodbye` (the governor's goodbye line to speak) and `msteams.vision`
+  (opt-in byte stream carrying the caller's screen-share/camera as attributed images).
 - **Call governors**: a bridge-side hard time cap (the agent speaks the goodbye), plus the
   StandIn-side governor.
 - **Hardened**: HMAC-signed upgrades with replay guard, connection caps, dead-peer detection,
@@ -43,18 +44,19 @@ Requires Python 3.10+.
 LIVEKIT_URL=wss://your-project.livekit.cloud \
 LIVEKIT_API_KEY=API... \
 LIVEKIT_API_SECRET=... \
-LIVEKIT_AGENT_NAME=standin-voice-agent \
-WORKER_SHARED_SECRET=... \
+LIVEKIT_AGENT_NAME=standin-agent \
+BRIDGE_SECRET=... \
 livekit-msteams-bridge
 ```
 
 A `.env` file in the working directory is loaded automatically (existing environment wins). The
-bridge listens on `ws://0.0.0.0:8080/voice/msteams/stream` by default; StandIn appends `/{callId}`
-per call. Expose the port with a tunnel and register the `wss://` URL as your identity's
+bridge listens on `ws://0.0.0.0:8080/msteams/calling` by default (`WS_PATH`); StandIn appends
+`/{callId}` per call. The bridge answers ONLY under that path, so anything else co-hosted on the
+same origin keeps its own routes. Expose the port with a tunnel and register the `wss://` URL as your identity's
 **Agent voice URL** in the StandIn dashboard.
 
 `LIVEKIT_AGENT_NAME` must equal the `agent_name` your worker registers with
-(`WorkerOptions(entrypoint_fnc=..., agent_name="standin-voice-agent")`). A mismatch is the classic
+(`WorkerOptions(entrypoint_fnc=..., agent_name="standin-agent")`). A mismatch is the classic
 silent failure: the room is created, the caller hears nothing, and the worker never gets a job.
 
 ## Embed
@@ -79,7 +81,7 @@ Everything is environment variables; names are identical to the Node package.
 
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
-| `WORKER_SHARED_SECRET` | yes | - | Must equal the shared secret from StandIn pairing (HMAC upgrade check). |
+| `BRIDGE_SECRET` | yes | - | Must equal the shared secret from StandIn pairing (HMAC upgrade check). |
 | `LIVEKIT_URL` | yes | - | LiveKit server URL (`wss://<project>.livekit.cloud` or self-hosted). |
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | yes | - | Mint join tokens, dispatch agents, delete rooms. Server-side only. |
 | `LIVEKIT_AGENT_NAME` | no | - | Named agent for explicit dispatch (recommended). Unset = automatic dispatch (prototype-only). |
@@ -88,8 +90,12 @@ Everything is environment variables; names are identical to the Node package.
 | `LIVEKIT_TILE_VIDEO` | no | `auto` | Relay an avatar agent's video onto the Teams tile. `auto` = the agent participant; or a specific participant identity; `off` disables the relay and keeps StandIn's built-in animated avatar. Voice-only agents are unaffected (no avatar video to relay). |
 | `LIVEKIT_TILE_VIDEO_FPS` | no | `15` | Send rate for the relayed tile stream (frames/s). |
 | `MAX_CALL_MINUTES` | no | `0` (off) | Bridge-side hard cap per call; on expiry the agent is asked to say goodbye, then the call ends. |
-| `GOODBYE_TEXT` / `GOODBYE_GRACE_MS` | no | (default line) / `8000` | Goodbye wording (sent on `teams.goodbye`) and playout grace. The call ends `GOODBYE_GRACE_MS` + a fixed 500 ms scheduling buffer after the goodbye request. |
+| `GOODBYE_TEXT` / `GOODBYE_GRACE_MS` | no | (default line) / `8000` | Goodbye wording (sent on `msteams.goodbye`) and playout grace. The call ends `GOODBYE_GRACE_MS` + a fixed 500 ms scheduling buffer after the goodbye request. |
 | `PORT` / `BIND` | no | `8080` / `0.0.0.0` | Listen port / bind address. |
+| `WS_PATH` | no | `/msteams/calling` | Base path the worker WebSocket is anchored on; a call dials `{WS_PATH}/{callId}`. Same shape as the OpenClaw and Hermes plugins, so one StandIn identity URL works for every backend. `/healthz` and `/metrics` stay at the root. |
+| `AMBIENT_VISION` | no | `false` | Publish the caller's newest screen-share/camera frame to the agent on `msteams.vision`. OFF by default: it is the knob that costs money per frame. |
+| `MAX_VISION_PER_MINUTE` | no | `30` | Per-call vision spend cap over a sliding 60 s window. **`0` disables** (the sibling OpenClaw plugin reads 0 as unlimited; that inversion is not carried over). |
+| `REQUIRE_RECORDING_STATUS` | no | `true` | Hold vision frames until Teams reports the recording active. Nothing is even stored before then, so nothing captured beforehand can surface later. |
 
 > **`LIVEKIT_TILE_VIDEO` needs an outbound video tile on your StandIn connection.** The relay draws
 > onto the tile StandIn publishes into the call, so that tile has to exist: the connection needs its
@@ -136,8 +142,10 @@ Your agent needs no Teams-specific code, but three integration points are availa
 - **`agent_name`** in `WorkerOptions` - must match `LIVEKIT_AGENT_NAME` for explicit dispatch.
 - **`ctx.job.metadata`** (JSON) - per-call context: `source`, `caller_name`, `tenant_id`,
   `call_direction`, and `user_id` (AAD id when Teams provides one).
-- **Data topics** - `teams.context` (participant count, DTMF, recording state) and `teams.goodbye`
-  (the governor's goodbye line; have your handler speak it and interrupt the current turn).
+- **Data topics** - `msteams.context` (participant count, DTMF, recording state), `msteams.goodbye`
+  (the governor's goodbye line; have your handler speak it and interrupt the current turn), and
+  `msteams.vision` (a byte stream of attributed screen-share/camera images, when the bridge runs
+  with `AMBIENT_VISION=true`; read it with `room.register_byte_stream_handler`).
 
 ## License
 

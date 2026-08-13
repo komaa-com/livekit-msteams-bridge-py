@@ -6,7 +6,7 @@ Minimal, working embedding of `livekit-msteams-bridge`: `load_config()` + `start
 
 ```bash
 pip install livekit-msteams-bridge
-cp .env.example .env   # fill in LIVEKIT_URL/KEY/SECRET, LIVEKIT_AGENT_NAME, WORKER_SHARED_SECRET
+cp .env.example .env   # fill in LIVEKIT_URL/KEY/SECRET, LIVEKIT_AGENT_NAME, BRIDGE_SECRET
 python main.py
 ```
 

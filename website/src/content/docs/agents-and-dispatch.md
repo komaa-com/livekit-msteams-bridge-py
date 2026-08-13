@@ -1,6 +1,6 @@
 ---
 title: "Agents and Dispatch"
-description: "How the bridge dispatches your LiveKit agent, the per-call metadata it passes, the teams.context and teams.goodbye data topics, and avatar agents."
+description: "How the bridge dispatches your LiveKit agent, the per-call metadata it passes, the msteams.context, msteams.goodbye and msteams.vision data topics, and avatar agents."
 ---
 
 The bridge is agnostic about what your agent does - any LiveKit agent (Python or Node, any STT/LLM/TTS/realtime stack) works unchanged. There are only three integration points: how it is **dispatched**, the **metadata** it receives, and two **data topics** it can listen on.
@@ -48,9 +48,9 @@ async def entrypoint(ctx: JobContext):
 
 ## Data topics
 
-The bridge publishes two reliable data topics into the room. Subscribe to them if your agent should react to call context or the governor.
+The bridge publishes two reliable data topics into the room, plus one opt-in byte stream. Subscribe to them if your agent should react to call context, the governor, or what the caller is showing.
 
-### `teams.context`
+### `msteams.context`
 
 Non-interrupting context about the call, as `{ "text": "..." }`:
 
@@ -60,18 +60,42 @@ Non-interrupting context about the call, as `{ "text": "..." }`:
 
 Feed these into your agent as system/context messages so it can adapt (for example, stay quiet in a group call until addressed).
 
-### `teams.goodbye`
+### `msteams.goodbye`
 
 The governor's goodbye line, as `{ "text": "..." }`. When a call hits its time limit, the bridge asks the agent to speak this text, waits `GOODBYE_GRACE_MS`, then ends the call. There is **no bridge-side TTS** on the room transport - the agent speaks the goodbye. Have your handler interrupt the current turn so the goodbye actually plays:
 
 ```python
 @ctx.room.on("data_received")
 def on_data(packet):
-    if packet.topic == "teams.goodbye":
+    if packet.topic == "msteams.goodbye":
         text = json.loads(packet.data)["text"]
         session.interrupt()               # stop the current turn
         session.say(text, allow_interruptions=False)
 ```
+
+### `msteams.vision`
+
+A **byte stream**, not a data packet: a screen-share JPEG is far larger than a LiveKit data packet may be. Published only when the bridge runs with `AMBIENT_VISION=true`, one stream per image, named `{source}-{ts}`. The attributes carry the attribution, so a handler never has to parse the image to know whose screen it is: `source` (`screenshare` or `camera`), `owner` (`"Sara's shared screen"`, degrading to `"a shared screen"` when Teams did not name the participant), `caption`, `width`, `height`, `ts`.
+
+```python
+def on_vision(reader: rtc.ByteStreamReader, participant_identity: str):
+    async def consume():
+        attrs = reader.info.attributes or {}
+        data = b"".join([chunk async for chunk in reader])
+        chat_ctx = session.current_agent.chat_ctx.copy()
+        chat_ctx.add_message(role="user", content=[
+            attrs.get("caption", "Live frame of the call."),
+            ImageContent(image=f"data:{reader.info.mime_type};base64,{base64.b64encode(data).decode()}"),
+        ])
+        await session.current_agent.update_chat_ctx(chat_ctx)
+
+    asyncio.create_task(consume())
+
+# BEFORE session.start: a stream whose topic has no handler is dropped, permanently.
+ctx.room.register_byte_stream_handler("msteams.vision", on_vision)
+```
+
+The frame is context for the agent's **next** turn - nothing here should make it speak. The bridge sends only CHANGED frames and caps the rate per call, so this stays cheap; see [Governors and Privacy](/livekit-msteams-bridge-py/governors-and-privacy/) for the recording gate and the spend cap.
 
 See [Governors and Privacy](/livekit-msteams-bridge-py/governors-and-privacy/) for the full governor behavior.
 
@@ -88,4 +112,4 @@ Two things to know for v1:
 - The avatar's **video** stays in the room. The Teams tile is rendered by StandIn's own animated avatar (RMS lip-sync), not the room video. Bridging room video to the Teams tile is on the roadmap.
 - Avatar setups often run the avatar as a **separate participant** alongside the agent session. The bridge tracks the agent identity and only ends the call when *that* participant leaves, so a flapping avatar participant will not cut a healthy call short.
 
-Ready-made examples (a minimal voice agent and a bitHuman avatar variant) live in [`examples/agents/`](https://github.com/komaa-com/livekit-msteams-bridge/tree/main/examples/agents) - they work with either the Node or the Python bridge.
+Ready-made examples live in this repository: [`examples/voice-agent`](https://github.com/komaa-com/livekit-msteams-bridge-py/tree/main/examples/voice-agent) and [`examples/avatar-agent`](https://github.com/komaa-com/livekit-msteams-bridge-py/tree/main/examples/avatar-agent). Both register as `standin-agent` and work with either the Node or the Python bridge.

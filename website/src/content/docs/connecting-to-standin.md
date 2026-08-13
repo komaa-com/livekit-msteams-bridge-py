@@ -52,8 +52,8 @@ Use it to: run the agent in production for your users.
 
 ## Where the shared secret comes from
 
-- **Sandbox:** the sandbox page issues a secret for the session - copy it into `WORKER_SHARED_SECRET`.
-- **Free / Subscription:** **pairing your bot in the StandIn dashboard issues the secret.** Copy it into `WORKER_SHARED_SECRET`.
+- **Sandbox:** the sandbox page issues a secret for the session - copy it into `BRIDGE_SECRET`.
+- **Free / Subscription:** **pairing your bot in the StandIn dashboard issues the secret.** Copy it into `BRIDGE_SECRET`.
 
 The value in your env **must equal** the value StandIn holds, or the HMAC handshake fails with `401`. For account, dashboard, and bot-pairing specifics, follow the StandIn docs at [docs.komaa.com](https://docs.komaa.com).
 
@@ -62,7 +62,7 @@ The value in your env **must equal** the value StandIn holds, or the HMAC handsh
 In the StandIn dashboard, set your identity's **agent WebSocket URL** to where this bridge listens, for example:
 
 ```text
-wss://el-bridge.example.com:8080/voice/msteams/stream
+wss://el-bridge.example.com:8080/msteams/calling
 ```
 
 StandIn appends `/{callId}` per call. Any base path works - the bridge takes the **last path segment** as the call id and verifies it against the HMAC signature and the `session.start` body.
@@ -71,7 +71,7 @@ StandIn appends `/{callId}` per call. Any base path works - the bridge takes the
 
 Two governors can end a call, and both speak before hanging up:
 
-- **StandIn-side (tier limits):** when a sandbox/free daily cap or a subscription max-minutes governor is reached, StandIn sends an `assistant.say` message with a short goodbye line. The bridge forwards it to your agent on the `teams.goodbye` data topic (the agent speaks it - there is no bridge-side TTS on the room transport) and the call is torn down by StandIn. The caller hears a clean sign-off rather than a sudden drop.
+- **StandIn-side (tier limits):** when a sandbox/free daily cap or a subscription max-minutes governor is reached, StandIn sends an `assistant.say` message with a short goodbye line. The bridge forwards it to your agent on the `msteams.goodbye` data topic (the agent speaks it - there is no bridge-side TTS on the room transport) and the call is torn down by StandIn. The caller hears a clean sign-off rather than a sudden drop.
 - **Bridge-side (`MAX_CALL_MINUTES`):** your own hard cap per call, useful because ElevenLabs knows nothing about your budget. See [Governors and Privacy](/livekit-msteams-bridge-py/governors-and-privacy/).
 
 If both fire at once, the first goodbye wins - the bridge never speaks two.

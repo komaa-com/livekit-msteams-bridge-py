@@ -67,7 +67,7 @@ def main() -> None:
     except ValueError as err:  # config errors (missing/invalid env vars)
         print(f"livekit-msteams-bridge: {err}", file=sys.stderr)
         print(
-            "Required env: LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, WORKER_SHARED_SECRET (see .env.example).",
+            "Required env: LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, BRIDGE_SECRET (see .env.example).",
             file=sys.stderr,
         )
         sys.exit(1)

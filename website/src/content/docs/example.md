@@ -3,7 +3,7 @@ title: "Run the Example"
 description: "A guided walkthrough: run the example voice agent, run the bridge embedding, connect StandIn, take a call, then swap in the bitHuman avatar."
 ---
 
-Two example projects show a full working setup - the repository ships a minimal bridge embedding ([`examples/basic-bridge`](https://github.com/komaa-com/livekit-msteams-bridge-py/tree/main/examples/basic-bridge)), and the Node sibling repository ships ready-to-run **agents** ([`examples/agents`](https://github.com/komaa-com/livekit-msteams-bridge/tree/main/examples/agents), Python agents that work with either bridge). This page walks through both so you understand every moving part.
+Three example projects show a full working setup, all in this repository: a minimal bridge embedding ([`examples/basic-bridge`](https://github.com/komaa-com/livekit-msteams-bridge-py/tree/main/examples/basic-bridge)) and two ready-to-run agents ([`examples/voice-agent`](https://github.com/komaa-com/livekit-msteams-bridge-py/tree/main/examples/voice-agent) and [`examples/avatar-agent`](https://github.com/komaa-com/livekit-msteams-bridge-py/tree/main/examples/avatar-agent)). This page walks through them so you understand every moving part.
 
 ## What a working setup needs
 
@@ -15,20 +15,20 @@ A LiveKit call has **three** processes, two of them yours:
 
 ## 1. Run the example voice agent
 
-The example agents are plain LiveKit agents (OpenAI STT/LLM/TTS + Silero VAD) - nothing Teams-specific:
+The example agents are plain LiveKit agents - nothing Teams-specific. The pipeline is picked from what your environment offers: Azure speech-to-speech realtime, Azure STT/LLM/TTS, or plain OpenAI (see the example's README).
 
 ```bash
-git clone https://github.com/komaa-com/livekit-msteams-bridge
-cd livekit-msteams-bridge/examples/agents
-cp .env.example .env   # LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, OPENAI_API_KEY
+git clone https://github.com/komaa-com/livekit-msteams-bridge-py
+cd livekit-msteams-bridge-py/examples/voice-agent
+cp .env.example .env   # LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET + one model stack
 uv sync
-uv run voice_agent.py download-files
-uv run voice_agent.py dev
+uv run python -m livekit.agents download-files
+uv run worker.py dev
 ```
 
-(Plain pip works too: `pip install -r requirements.txt && python voice_agent.py dev`.)
+(Plain pip works too: `pip install -r requirements.txt && python worker.py dev`.)
 
-The worker registers as **`standin-voice-agent`** and waits - it will not join anything until the bridge creates a room and dispatches it.
+The worker registers as **`standin-agent`** and waits - it will not join anything until the bridge creates a room and dispatches it.
 
 ## 2. Run the bridge example
 
@@ -36,14 +36,14 @@ The worker registers as **`standin-voice-agent`** and waits - it will not join a
 pip install livekit-msteams-bridge
 git clone https://github.com/komaa-com/livekit-msteams-bridge-py
 cd livekit-msteams-bridge-py/examples/basic-bridge
-cp .env.example .env   # same LiveKit project + LIVEKIT_AGENT_NAME=standin-voice-agent + WORKER_SHARED_SECRET
+cp .env.example .env   # same LiveKit project + LIVEKIT_AGENT_NAME=standin-agent + BRIDGE_SECRET
 python main.py
 ```
 
 It prints the WebSocket URL to give StandIn:
 
 ```text
-Point your StandIn identity's agent WebSocket URL at ws://<this-host>:8080/voice/msteams/stream
+Point your StandIn identity's agent WebSocket URL at ws://<this-host>:8080/msteams/calling
 ```
 
 The `main.py` is the recommended embedding shape in ~25 lines: `load_dotenv()`, `load_config()` (fails loud on any misconfiguration), `await start_server(cfg)`, and a graceful `await server.close()` on Ctrl-C / SIGTERM that ends live calls with a spoken-protocol `session.end` rather than a hard drop.
@@ -51,18 +51,18 @@ The `main.py` is the recommended embedding shape in ~25 lines: `load_dotenv()`, 
 ## 3. Connect StandIn and call
 
 1. Expose port 8080 with a tunnel (`tailscale funnel --bg --https=8080 8080`, `cloudflared tunnel --url http://localhost:8080`, or `ngrok http 8080`).
-2. In your [StandIn dashboard](https://standin.komaa.com/dashboard), set the identity's **Agent voice URL** to the `wss://.../voice/msteams/stream` form and make sure the shared secret equals `WORKER_SHARED_SECRET`.
-3. Call your Teams bot (or join the sandbox meeting). The bridge creates the room, dispatches `standin-voice-agent`, and the agent answers.
+2. In your [StandIn dashboard](https://standin.komaa.com/dashboard), set the identity's **Agent voice URL** to the `wss://.../msteams/calling` form and make sure the shared secret equals `BRIDGE_SECRET`.
+3. Call your Teams bot (or join the sandbox meeting). The bridge creates the room, dispatches `standin-agent`, and the agent answers.
 
 ## 4. Swap in the avatar agent
 
-`avatar_agent.py` is the same pipeline plus a lip-synced **bitHuman** avatar. Two extra variables in the agent's `.env` (`BITHUMAN_API_SECRET`, `BITHUMAN_MODEL_PATH`), then:
+[`examples/avatar-agent`](https://github.com/komaa-com/livekit-msteams-bridge-py/tree/main/examples/avatar-agent) is the same pipeline plus a lip-synced **bitHuman** avatar. Two extra variables in that agent's `.env` (`BITHUMAN_API_SECRET`, `BITHUMAN_MODEL_PATH`), then:
 
 ```bash
-uv run avatar_agent.py dev
+cd ../avatar-agent && uv sync && uv run worker.py dev
 ```
 
-and restart the bridge with `LIVEKIT_AGENT_NAME=standin-avatar-agent`. The caller hears the avatar's audio; the avatar's video stays in the room (the Teams tile is rendered by StandIn's own animated avatar - see [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/)).
+Stop the voice worker first: both register as `standin-agent`, and explicit dispatch resolves a single name. The caller hears the avatar's audio; the avatar's video stays in the room (the Teams tile is rendered by StandIn's own animated avatar - see [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/)).
 
 ## What the example agents demonstrate
 
@@ -70,7 +70,7 @@ Each example shows the three integration points your own agent can use:
 
 - **`agent_name`** in `WorkerOptions` - the dispatch contract with `LIVEKIT_AGENT_NAME`.
 - **`ctx.job.metadata`** - per-call caller context (`caller_name`, `tenant_id`, `call_direction`, `user_id` when known) for greetings and personalization.
-- **`teams.context` / `teams.goodbye` data topics** - call context and the governor's goodbye handler (interrupt the current turn, speak the line).
+- **`msteams.context` / `msteams.goodbye` / `msteams.vision` data topics** - call context, the governor's goodbye handler (interrupt the current turn, speak the line), and the opt-in ambient-vision byte stream.
 
 Details and copy-paste handlers: [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/).
 

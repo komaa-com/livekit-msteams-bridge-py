@@ -35,7 +35,7 @@ flowchart TD
     A["upgrade + HMAC verify<br/>401 on bad / replayed / stale signature<br/>409 if callId already live"]
     B["session.start<br/>callId cross-checked vs the URL<br/>10s pre-start timeout if it never arrives"]
     C["create room + dispatch agent<br/>one retry on a transient failure<br/>caller audio buffered ~5s while connecting"]
-    D["relay<br/>audio.frame -&gt; AudioSource<br/>agent track -&gt; audio.frame<br/>participants / dtmf / recording -&gt; teams.context<br/>governor -&gt; teams.goodbye"]
+    D["relay<br/>audio.frame -&gt; AudioSource<br/>agent track -&gt; audio.frame<br/>participants / dtmf / recording -&gt; msteams.context<br/>governor -&gt; msteams.goodbye<br/>screen-share / camera -&gt; msteams.vision (opt-in)"]
     E["teardown<br/>worker close, agent leaves, session.end,<br/>governor, or SIGTERM<br/>leaves + deletes the room, closes the socket,<br/>clears timers, de-registers the call"]
 
     A --> B --> C --> D --> E

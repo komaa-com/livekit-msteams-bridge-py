@@ -7,10 +7,11 @@ description: "The errors you will actually see on the upgrade, on the call, and 
 
 The HMAC handshake failed. Causes:
 
-- **Secret mismatch** - `WORKER_SHARED_SECRET` does not equal the value StandIn holds from pairing. They must match exactly.
+- **Secret mismatch** - `BRIDGE_SECRET` does not equal the value StandIn holds from pairing. They must match exactly.
 - **Clock skew** - the timestamp is outside the freshness window (`HMAC_FRESHNESS_MS`, default 60 s either side). Sync the clocks (NTP).
 - **Replayed handshake** - the same `(callId, ts, sig)` tuple was already used. This is the single-use guard doing its job; a genuine retry uses a fresh timestamp.
-- **Secret unset** - the bridge fails closed if `WORKER_SHARED_SECRET` is empty; every upgrade is rejected.
+- **Secret unset** - the bridge fails closed if `BRIDGE_SECRET` is empty; every upgrade is rejected.
+- **Wrong path** - the bridge answers ONLY under `WS_PATH` (default `/msteams/calling`), one segment per callId. A StandIn identity URL still pointing at the old `/voice/msteams/stream` shape gets a `401`, logged as `expected /msteams/calling/{callId}`.
 
 ## `409` Conflict
 
@@ -39,7 +40,7 @@ If a call connects and dispatches but the agent then sits silent for a long time
 
 ## The agent's goodbye gets cut off
 
-`teams.goodbye` handlers must interrupt the current turn and speak with interruptions disabled; otherwise an in-flight answer can outlast `GOODBYE_GRACE_MS`. See the handler snippet in [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/).
+`msteams.goodbye` handlers must interrupt the current turn and speak with interruptions disabled; otherwise an in-flight answer can outlast `GOODBYE_GRACE_MS`. See the handler snippet in [Agents and Dispatch](/livekit-msteams-bridge-py/agents-and-dispatch/).
 
 ## Governor never fires
 

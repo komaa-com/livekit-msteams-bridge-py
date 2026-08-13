@@ -30,7 +30,7 @@ This is the Python sibling of [`@komaa/livekit-msteams-bridge`](https://github.c
 
 - **Any LiveKit agent, unchanged** - your agent needs no Teams-specific code. It is dispatched into a normal room and hears a normal audio track; VAD, turn-taking and interruption run inside your agent session exactly as for WebRTC callers.
 - **Explicit dispatch** - one room per call, your named agent dispatched into it with per-call metadata (caller name, tenant, direction, AAD id when known) in `ctx.job.metadata`.
-- **Data-topic context** - `teams.context` (participant counts, DTMF, recording state) and `teams.goodbye` (the governor's goodbye line for your agent to speak).
+- **Data-topic context** - `msteams.context` (participant counts, DTMF, recording state), `msteams.goodbye` (the governor's goodbye line for your agent to speak) and `msteams.vision` (opt-in: the caller's screen-share/camera as attributed images).
 - **Avatar-aware** - the bridge relays the agent's voice even when an avatar republishes it, binds "the agent" by participant kind (not first-audio-wins), and survives track republishes.
 - **Two call governors** - StandIn-side tier cutoffs and a bridge-side `MAX_CALL_MINUTES` hard cap, both funneling into one agent-spoken goodbye.
 - **Hardened transport** - replay-proof HMAC handshake, connection and payload caps, duplicate-call rejection, dead-peer detection, graceful SIGTERM drain, Prometheus `/metrics`.
