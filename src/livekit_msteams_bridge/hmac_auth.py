@@ -1,8 +1,8 @@
 """The HMAC scheme the StandIn media bridge signs upgrades with.
 
 signature = HMAC-SHA256(secret, "{timestampMs}.{callId}") hex-lowercased.
-The worker sends it on the WS upgrade in X-OpenClawTeamsBridge-Timestamp /
-X-OpenClawTeamsBridge-Signature; the bridge replays the computation.
+The worker sends it on the WS upgrade in X-StandIn-Timestamp /
+X-StandIn-Signature; the bridge replays the computation.
 """
 
 from __future__ import annotations
@@ -14,10 +14,6 @@ import time
 
 TIMESTAMP_HEADER = "x-standin-timestamp"
 SIGNATURE_HEADER = "x-standin-signature"
-# Legacy header names (pre-rename). Still accepted during the transition; the
-# StandIn media bridge sends BOTH pairs, so either version interoperates.
-LEGACY_TIMESTAMP_HEADER = "x-openclawteamsbridge-timestamp"
-LEGACY_SIGNATURE_HEADER = "x-openclawteamsbridge-signature"
 
 
 def sign(secret: str, timestamp_ms: int | str, call_id: str) -> str:

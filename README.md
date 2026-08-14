@@ -1,34 +1,42 @@
-# livekit-msteams-bridge (Python)
+# Microsoft Teams Bridge for LiveKit Agents (Python)
 
-Put a **LiveKit Agent** - including avatar agents - on **Microsoft Teams voice/video calls**.
+Put a [LiveKit Agent](https://docs.livekit.io/agents/) on a real **Microsoft Teams call** - voice-only, or with a video avatar whose face and voice the caller sees and hears in Teams.
 
-> PyPI package: **`livekit-msteams-bridge`** - the `-py` suffix is only in this repository's
-> name, to distinguish it from the [Node.js sibling repo](https://github.com/komaa-com/livekit-msteams-bridge).
+The hosted **StandIn media bridge** ([standin.komaa.com](https://standin.komaa.com)) joins the Teams call and dials into this bridge over an HMAC-authenticated WebSocket. Per call, the bridge creates one LiveKit room, **dispatches your agent into it** (explicit dispatch by `agent_name`), joins as a participant, publishes the caller's audio, and relays the agent's audio back to Teams. You run no Teams media stack yourself.
 
-This is the Python sibling of [`@komaa/livekit-msteams-bridge`](https://www.npmjs.com/package/@komaa/livekit-msteams-bridge)
-(Node.js) - same wire contract, same environment variables, drop-in interchangeable behind the same
-`.env` file. The Node and Python packages version independently, so a version-number gap between them is expected; both implement the same StandIn wire protocol and interoperate with the hosted service identically. It terminates the StandIn media bridge wire protocol on one side and a LiveKit room on
-the other:
+```text
+Microsoft Teams call
+       |
+       v
+StandIn media bridge       (hosted; joins the call)
+       |   HMAC WebSocket, PCM 16 kHz
+       v
+this bridge                (you run it)
+       |   WebRTC (room, one per call)
+       v
+LiveKit room  <--dispatch--  your LiveKit Agent
+                             (STT + LLM + TTS + turn-taking, any plugin stack)
+```
 
-- **One room per call**: the bridge creates a fresh room, joins as a participant, and dispatches
-  your agent into it (explicit dispatch by `agent_name` - LiveKit's recommended model).
-- **No transcoding on our side**: the worker speaks 16 kHz mono PCM16 natively; the room side uses
-  the SDK's resampling `AudioSource`/`AudioStream`, so the bridge itself never transcodes.
-- **Agent integration without Teams code**: per-call metadata (`ctx.job.metadata` - caller name,
-  tenant, direction, AAD id when known) plus three data topics: `msteams.context` (participants, DTMF,
-  recording state), `msteams.goodbye` (the governor's goodbye line to speak) and `msteams.vision`
-  (opt-in byte stream carrying the caller's screen-share/camera as attributed images).
-- **Call governors**: a bridge-side hard time cap (the agent speaks the goodbye), plus the
-  StandIn-side governor.
-- **Hardened**: HMAC-signed upgrades with replay guard, connection caps, dead-peer detection,
-  graceful SIGTERM drain, Prometheus `/metrics`.
+Both sides speak 16 kHz mono PCM16: the wire protocol natively, the room via the SDK's resampling `AudioSource`/`AudioStream` - the bridge itself never transcodes.
 
-[StandIn](https://standin.komaa.com) is the hosted media bridge that joins the Teams call and dials
-this bridge - you run no Teams media stack yourself.
+## Features
 
-**Documentation**: [komaa-com.github.io/livekit-msteams-bridge-py](https://komaa-com.github.io/livekit-msteams-bridge-py/)
-(getting started, example walkthrough, agents and dispatch, configuration and library reference,
-wire protocol). Teams/StandIn setup lives at [docs.komaa.com](https://docs.komaa.com/livekit/installation).
+- **Any LiveKit agent answers Teams calls** - your existing agent, any STT/LLM/TTS/realtime plugin combo, needs no Teams-specific code. The bridge dispatches it by `agent_name` with per-call metadata (caller name, tenant, direction, AAD id when known).
+- **One room per call** - clean lifecycle: room created at `session.start`, agent dispatched via the join token, room deleted at teardown so the agent job ends immediately.
+- **Turn-taking is the agent's own** - VAD, interruption and endpointing all run inside your LiveKit agent session, exactly as they do for WebRTC users.
+- **Group-call awareness** - participant counts, speaker changes, DTMF digits and recording state reach the agent as data messages on the `msteams.context` topic.
+- **Avatar video on the Teams tile** - an avatar agent's video is relayed onto the caller's tile by default (`LIVEKIT_TILE_VIDEO=auto`); voice-only agents are unaffected.
+- **Ambient vision (opt-in)** - the caller's screen-share and camera reach the agent as attributed images on the `msteams.vision` byte-stream topic, only when the scene changes and inside a per-call spend cap.
+- **Call governor** - a bridge-side `MAX_CALL_MINUTES` hard cap, with the goodbye spoken by the agent over `msteams.goodbye`, plus the StandIn-side cutoff.
+- **Hardened transport** - replay-proof single-use HMAC upgrade, connection caps checked before crypto, payload caps, pre-start timeout, dead-peer detection, graceful SIGTERM drain.
+- **Observability** - `GET /healthz` and `GET /metrics` (Prometheus text format): calls, rejections, relayed and dropped frames.
+
+> **Not yet at parity with the Node.js sibling.** Two of its features are not implemented here: the
+> group-call gate (`GROUP_CALL_REQUIRE_ADDRESS` / `GROUP_CALL_WAKE_PHRASES`, "speak only when
+> addressed" in a meeting) and the no-answer fallback (`STALE_CALL_REAPER_SECONDS`, ending a call
+> whose agent never joined). Both are on the roadmap below. Everything else, including the wire
+> protocol and the environment variable names, is the same.
 
 ## Install
 
@@ -40,24 +48,37 @@ Requires Python 3.10+.
 
 ## Run
 
+This is the whole configuration - five values, all required, no optional keys. Everything else has a
+default that is already correct. Put them in a `.env` file in the working directory, which is loaded
+automatically (an existing environment variable always wins):
+
 ```bash
-LIVEKIT_URL=wss://your-project.livekit.cloud \
-LIVEKIT_API_KEY=API... \
-LIVEKIT_API_SECRET=... \
-LIVEKIT_AGENT_NAME=standin-agent \
-BRIDGE_SECRET=... \
+# --- LiveKit project (LiveKit Cloud, or your self-hosted server) ---
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=API...
+LIVEKIT_API_SECRET=...
+
+# The exact agent_name your worker registers with
+# (WorkerOptions(entrypoint_fnc=..., agent_name="standin-agent")). A worker that registers a name is
+# reachable ONLY by explicit dispatch, so a mismatch here is the classic silent failure: the room is
+# created, the worker never gets a job, and the caller hears nothing.
+LIVEKIT_AGENT_NAME=standin-agent
+
+# The connection secret from the StandIn portal. Must byte-match, or the handshake is rejected with
+# 401 - which looks like silence from the caller's point of view.
+BRIDGE_SECRET=paste-the-value-from-the-StandIn-portal
+```
+
+Then run it:
+
+```bash
 livekit-msteams-bridge
 ```
 
-A `.env` file in the working directory is loaded automatically (existing environment wins). The
-bridge listens on `ws://0.0.0.0:8080/msteams/calling` by default (`WS_PATH`); StandIn appends
-`/{callId}` per call. The bridge answers ONLY under that path, so anything else co-hosted on the
-same origin keeps its own routes. Expose the port with a tunnel and register the `wss://` URL as your identity's
-**Agent voice URL** in the StandIn dashboard.
-
-`LIVEKIT_AGENT_NAME` must equal the `agent_name` your worker registers with
-(`WorkerOptions(entrypoint_fnc=..., agent_name="standin-agent")`). A mismatch is the classic
-silent failure: the room is created, the caller hears nothing, and the worker never gets a job.
+The bridge listens on **`:8080`** at **`/msteams/calling`** by default (`PORT`, `WS_PATH`); StandIn
+appends `/{callId}` per call. It answers ONLY under that path, so anything else co-hosted on the same
+origin keeps its own routes. Expose the port with a tunnel and register the public `wss://` URL as
+your identity's **Agent voice URL** in the StandIn dashboard - never the local `ws://` bind.
 
 ## Embed
 
@@ -75,63 +96,70 @@ asyncio.run(main())
 Tests can inject a fake room with the `connect_room` argument - see the test suite's
 `FakeRoomPort` for the shape.
 
+## Examples
+
+Three runnable examples, each with its own README:
+
+| Example | What it is |
+|---|---|
+| [`examples/basic-bridge/`](./examples/basic-bridge/) | Embed the package in your own project instead of running the CLI: `load_config()` + `start_server()`. |
+| [`examples/voice-agent/`](./examples/voice-agent/) | A working voice agent the bridge dispatches onto a Teams call: a speech pipeline plus silero VAD. Ships a Dockerfile. |
+| [`examples/avatar-agent/`](./examples/avatar-agent/) | The same pipeline plus a video avatar, so the caller sees a face on the Teams tile and hears its synchronized voice. Ships a Dockerfile. |
+
+Both agent examples show the three Teams integration points: `agent_name` for dispatch,
+`ctx.job.metadata` for per-call context, and the `msteams.*` data topics.
+
 ## Configuration
 
-Everything is environment variables; names are identical to the Node package.
+Every setting is an environment variable, and [`.env.example`](./.env.example) ships fully commented
+with the package.
 
-| Variable | Required | Default | Meaning |
-|---|---|---|---|
-| `BRIDGE_SECRET` | yes | - | Must equal the shared secret from StandIn pairing (HMAC upgrade check). |
-| `LIVEKIT_URL` | yes | - | LiveKit server URL (`wss://<project>.livekit.cloud` or self-hosted). |
-| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | yes | - | Mint join tokens, dispatch agents, delete rooms. Server-side only. |
-| `LIVEKIT_AGENT_NAME` | no | - | Named agent for explicit dispatch (recommended). Unset = automatic dispatch (prototype-only). |
-| `LIVEKIT_ROOM_PREFIX` | no | `msteams-` | Room name prefix; the room is `{prefix}{callId}` (sanitized). |
-| `LIVEKIT_DELETE_ROOM_ON_END` | no | `true` | Delete the room at teardown so the agent job ends immediately (billing hygiene). |
-| `LIVEKIT_TILE_VIDEO` | no | `auto` | Relay an avatar agent's video onto the Teams tile. `auto` = the agent participant; or a specific participant identity; `off` disables the relay and keeps StandIn's built-in animated avatar. Voice-only agents are unaffected (no avatar video to relay). |
-| `LIVEKIT_TILE_VIDEO_FPS` | no | `15` | Send rate for the relayed tile stream (frames/s). |
-| `MAX_CALL_MINUTES` | no | `0` (off) | Bridge-side hard cap per call; on expiry the agent is asked to say goodbye, then the call ends. |
-| `GOODBYE_TEXT` / `GOODBYE_GRACE_MS` | no | (default line) / `8000` | Goodbye wording (sent on `msteams.goodbye`) and playout grace. The call ends `GOODBYE_GRACE_MS` + a fixed 500 ms scheduling buffer after the goodbye request. |
-| `PORT` / `BIND` | no | `8080` / `0.0.0.0` | Listen port / bind address. |
-| `WS_PATH` | no | `/msteams/calling` | Base path the worker WebSocket is anchored on; a call dials `{WS_PATH}/{callId}`. Same shape as the OpenClaw and Hermes plugins, so one StandIn identity URL works for every backend. `/healthz` and `/metrics` stay at the root. |
-| `AMBIENT_VISION` | no | `false` | Publish the caller's newest screen-share/camera frame to the agent on `msteams.vision`. OFF by default: it is the knob that costs money per frame. |
-| `MAX_VISION_PER_MINUTE` | no | `30` | Per-call vision spend cap over a sliding 60 s window. **`0` disables** (the sibling OpenClaw plugin reads 0 as unlimited; that inversion is not carried over). |
-| `REQUIRE_RECORDING_STATUS` | no | `true` | Hold vision frames until Teams reports the recording active. Nothing is even stored before then, so nothing captured beforehand can surface later. |
+**[Configuration reference](https://komaa-com.github.io/livekit-msteams-bridge-py/configuration-reference/)**
+documents all of them: what each does, its default, and when to change it.
 
-> **`LIVEKIT_TILE_VIDEO` needs an outbound video tile on your StandIn connection.** The relay draws
-> onto the tile StandIn publishes into the call, so that tile has to exist: the connection needs its
-> avatar and video enabled. If it is off, this bridge streams perfectly valid frames and they are
-> discarded on arrival - the caller simply sees no video, and the bridge has no way to know. If your
-> agent publishes video, `LIVEKIT_TILE_VIDEO` is `auto`, and the caller still sees nothing, check that
-> setting on your StandIn connection first; recent worker builds log a one-time warning naming it.
-| `HMAC_FRESHNESS_MS` | no | `60000` | Two-sided freshness window: a timestamp up to 60 s in the past OR the future is accepted, and the replay guard holds a used handshake until the timestamp ages out. |
-| `MAX_CONNECTIONS` / `MAX_CONNECTIONS_PER_IP` | no | `64` / = total | Connection caps. |
-| `PRE_START_TIMEOUT_MS` | no | `10000` | Drop a worker that authenticates but never sends `session.start`. |
-| `WORKER_IDLE_TIMEOUT_MS` | no | `90000` | Dead-peer window (the worker heartbeats every 30 s). |
-| `TRUST_PROXY_XFF` | no | `false` | Trust the first `X-Forwarded-For` hop for the per-IP cap. |
-| `TLS_CERT_PATH` / `TLS_KEY_PATH` | no | - | Serve native TLS (`wss`). Otherwise front the plain WS with a TLS terminator. |
-| `LOG_LEVEL` | no | `info` | `debug` / `info` / `warn` / `error`. |
+Two that catch people out:
+
+- `LIVEKIT_AGENT_NAME` must equal the `agent_name` your worker registers with. A mismatch creates the
+  room, dispatches nobody, and the caller hears silence.
+- `LIVEKIT_TILE_VIDEO` relays an avatar agent's video onto the Teams tile. If the caller sees no
+  video, check that your StandIn connection has video enabled: the relay draws onto the tile StandIn
+  publishes, so if that tile does not exist the bridge streams valid frames into nothing and has no
+  way to detect it.
 
 ## Endpoints
 
 - `GET /healthz` - liveness.
 - `GET /metrics` - Prometheus counters (calls, rejections, relayed/dropped frames).
 - `GET /{...}/{callId}` + WebSocket upgrade - the worker wire, HMAC-signed with
-  `X-OpenClawTeamsBridge-Timestamp` / `X-OpenClawTeamsBridge-Signature` over
+  `X-StandIn-Timestamp` / `X-StandIn-Signature` over
   `"{timestampMs}.{callId}"`.
 
-Notes for operators:
+## Roadmap
 
-- `/healthz` and `/metrics` are **unauthenticated** (only the WebSocket upgrade is HMAC-gated).
-  They expose no call content - just liveness and counters - but if you would rather not leak call
-  volumes, keep the port behind your ingress/tunnel rules.
-- Barge-in: interruption handling lives **inside your LiveKit agent session** (VAD, turn-taking),
-  exactly as for WebRTC callers; the room transport gives the bridge no interruption event to relay,
-  so the worker's own flush-on-silence smooths the tail end.
-- The bridge participant's join token has a fixed **6 h TTL**. Calls that should be allowed to run
-  longer than that need a re-join strategy; in practice set `MAX_CALL_MINUTES` well below it.
-- Inbound Teams **video** (`video.frame`) is not forwarded to the room in this version - the bot's
-  tile is rendered by the worker's own avatar. Publishing caller video as a room track is on the
-  roadmap.
+Where the bridge stands today, and what each of these needs to move:
+
+- **Barge-in flush**: interruption handling lives inside your LiveKit agent session (VAD,
+  turn-taking), exactly as for WebRTC callers. The room transport gives the bridge no interruption
+  event to relay, so the worker's own flush-on-silence smooths the tail end. An agent-published data
+  event could close this later.
+- **Caller video as a room track**: inbound Teams `video.frame` is not published into the room in
+  this version. With `AMBIENT_VISION=true` it reaches the agent as attributed images on
+  `msteams.vision` instead, which is what carries the "Sara's shared screen" attribution a raw track
+  cannot.
+- **Long calls**: the bridge participant's join token has a fixed 6 h TTL. Calls meant to outlast
+  that need a re-join strategy; in practice set `MAX_CALL_MINUTES` well below it.
+- **Group-call gate**: the Node.js sibling can withhold the agent's audio in a meeting until a caller
+  addresses it by name (`GROUP_CALL_REQUIRE_ADDRESS`, `GROUP_CALL_WAKE_PHRASES`). Not implemented
+  here yet, so in a group call this bridge relays the agent's audio the whole time.
+- **No-answer fallback**: the Node.js sibling ends a call whose agent never joined the room after
+  `STALE_CALL_REAPER_SECONDS`. Not implemented here yet, so a dispatch that never lands leaves the
+  caller on a silent call until they hang up or `MAX_CALL_MINUTES` fires.
+
+## Security notes
+
+- `/healthz` and `/metrics` are **unauthenticated**; only the WebSocket upgrade is HMAC-gated. They
+  expose no call content, just liveness and counters, but keep the port behind your ingress or
+  tunnel rules if you would rather not publish call volumes.
 - The Docker image exposes port **8080** and does not remap `PORT`/`BIND` at the Docker layer; use
   `-e PORT=... -p <host>:<port>` together if you change them.
 

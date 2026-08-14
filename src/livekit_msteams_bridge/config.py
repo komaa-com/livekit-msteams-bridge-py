@@ -16,8 +16,8 @@ from .vision import AmbientVisionConfig, resolve_ambient_vision_config
 
 DEFAULT_GOODBYE = "I'm sorry, we've reached the time limit for this call. Thank you for calling, goodbye!"
 
-# Same default as the OpenClaw and Hermes plugins, so ONE StandIn identity URL shape works for every
-# backend and the portal's bare-host completion is correct here too.
+# StandIn dials {WS_PATH}/{callId}, and the portal completes a bare host to this path, so this is
+# what an identity registered without an explicit path will reach.
 DEFAULT_WS_PATH = "/msteams/calling"
 
 

@@ -69,7 +69,7 @@ def test_bridge_owned_topics_are_namespaced_but_livekits_is_untouched():
     room = code("livekit_room.py")
     assert "'msteams.context'" in room and "'msteams.goodbye'" in room and "'msteams.vision'" in room
     for stale in ("'teams.context'", "'teams.goodbye'", "'teams.vision'"):
-        assert stale not in room, f"{stale} is the pre-rename topic"
+        assert stale not in room, f"{stale} is not a topic this bridge publishes"
 
 
 def test_the_docstring_stripper_cannot_be_satisfied_by_prose():
