@@ -1,8 +1,8 @@
 """Worker-facing WebSocket server. The StandIn media bridge dials
 {wsBaseUrl}{WS_PATH}/{callId} with an HMAC-signed upgrade
-(X-OpenClawTeamsBridge-Timestamp / -Signature over "{timestampMs}.{callId}").
+(X-StandIn-Timestamp / -Signature over "{timestampMs}.{callId}").
 
-DoS guards - parity with the OpenClaw/Hermes msteams providers. A single shared
+DoS guards. A single shared
 secret gates the upgrade, but a buggy or compromised worker (or a leaked
 secret) must not be able to exhaust memory/sockets.
 """
@@ -20,8 +20,6 @@ from aiohttp import WSMsgType, web
 from .config import BridgeConfig
 from .session import RoomConnector
 from .hmac_auth import (
-    LEGACY_SIGNATURE_HEADER,
-    LEGACY_TIMESTAMP_HEADER,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
     is_fresh,
@@ -131,20 +129,9 @@ def authorize_upgrade(
     # than authenticating anyone. load_config() requires it, but never trust that.
     if not cfg.bridge_secret:
         return {"error": "bridge shared secret is not configured"}
-    ts_header = (
-        headers.get(TIMESTAMP_HEADER)
-        or headers.get(TIMESTAMP_HEADER.title())
-        or headers.get(LEGACY_TIMESTAMP_HEADER)
-        or headers.get(LEGACY_TIMESTAMP_HEADER.title())
-        or ""
-    )
-    sig = (
-        headers.get(SIGNATURE_HEADER)
-        or headers.get(SIGNATURE_HEADER.title())
-        or headers.get(LEGACY_SIGNATURE_HEADER)
-        or headers.get(LEGACY_SIGNATURE_HEADER.title())
-        or ""
-    )
+    # X-StandIn-* is the ONLY accepted header pair.
+    ts_header = headers.get(TIMESTAMP_HEADER) or headers.get(TIMESTAMP_HEADER.title()) or ""
+    sig = headers.get(SIGNATURE_HEADER) or headers.get(SIGNATURE_HEADER.title()) or ""
     try:
         ts = float(ts_header)
     except (TypeError, ValueError):

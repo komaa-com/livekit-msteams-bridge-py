@@ -120,7 +120,7 @@ def test_resolver_merges_per_key_not_on_truthiness():
 
 @pytest.mark.parametrize("cap", [0, -1])
 def test_zero_or_negative_budget_disables(cap):
-    """Deliberate inversion of the OpenClaw plugin, where 0 meant UNLIMITED."""
+    """0 DISABLES the cap; it never means "unlimited"."""
     assert not VisionBudget(cap).try_consume("c", 0)
 
 

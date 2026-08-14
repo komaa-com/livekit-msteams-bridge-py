@@ -37,7 +37,7 @@ Continuous visual awareness of the call: the newest frame of each participant's 
 | Env | Default | Meaning |
 |---|---|---|
 | `AMBIENT_VISION` | `false` | Master switch. **Off by default**: this is the knob that costs money per frame, so a bridge nobody configured never starts spending because a worker happened to send video. |
-| `MAX_VISION_PER_MINUTE` | `30` | Per-call spend cap over a sliding 60 s window. **`0` DISABLES** - note the sibling OpenClaw plugin reads `0` as *unlimited*; that inversion is deliberately not carried over, because `AMBIENT_VISION` is already the on-switch. Use a large number for "effectively unlimited". |
+| `MAX_VISION_PER_MINUTE` | `30` | Per-call spend cap over a sliding 60 s window. **`0` DISABLES** rather than meaning unlimited: for a high cap, set a high number. |
 | `REQUIRE_RECORDING_STATUS` | `true` | Hold frames until Teams reports the call recording as active (Media Access obligation). Frames are not even **stored** before then, so nothing captured beforehand can surface later. |
 
 Only CHANGED frames are sent (a frozen screen costs nothing), screen-share is tried before camera so a tight budget spends its last slot on the screen, and a failed publish refunds the slot and leaves the frame retryable. Booleans here are strict: `REQUIRE_RECORDING_STATUS=yes` stops startup rather than quietly disabling the gate.
@@ -48,7 +48,7 @@ Only CHANGED frames are sent (a frozen screen costs nothing), screen-share is tr
 |---|---|---|
 | `PORT` | `8080` | TCP port the bridge listens on. |
 | `BIND` | `0.0.0.0` | Bind address. |
-| `WS_PATH` | `/msteams/calling` | Base path the worker WebSocket is anchored on; a call dials `{WS_PATH}/{callId}` and nothing else is accepted (a foreign path is a `401`, before authentication). Same default as the OpenClaw and Hermes plugins, so one StandIn identity URL shape works for every backend. `/healthz` and `/metrics` stay at the root. An empty value stops startup. |
+| `WS_PATH` | `/msteams/calling` | Base path the worker WebSocket is anchored on; a call dials `{WS_PATH}/{callId}` and nothing else is accepted (a foreign path is a `401`, before authentication). This is what an identity registered with a bare host will reach. `/healthz` and `/metrics` stay at the root. An empty value stops startup. |
 | `TLS_CERT_PATH` / `TLS_KEY_PATH` | unset | PEM cert/key for native TLS (`wss`). When both are set the bridge serves TLS itself; otherwise front the plain WS with a TLS terminator. |
 | `HMAC_FRESHNESS_MS` | `60000` | Two-sided freshness window: a timestamp up to 60 s in the past OR the future is accepted; the replay guard holds a used handshake until the timestamp ages out. |
 | `MAX_CONNECTIONS` | `0` (= 64) | Max concurrent connections. |

@@ -52,10 +52,9 @@ class AmbientVisionConfig:
     max_per_minute: float
     """Per-call spend cap over a sliding 60-second window.
 
-    NOTE a deliberate divergence from the sibling OpenClaw plugin, where `0` meant UNLIMITED - the
-    inverse of what everyone reads it as, and its only kill switch. Here `0` DISABLES, and the
-    separate `enabled` flag is how the feature is turned on. Set a large number for "effectively
-    unlimited"."""
+    `0` DISABLES rather than meaning "unlimited", because a spend cap whose zero value removes the
+    cap is the wrong way round for the one knob that costs money per frame. The separate `enabled`
+    flag turns the feature on. Set a large number for "effectively unlimited"."""
     require_recording_status: bool
     """Hold frames back until Teams reports the call recording as active (Media Access obligation)."""
 

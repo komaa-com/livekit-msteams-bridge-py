@@ -14,7 +14,7 @@ The StandIn media bridge opens one WebSocket per call to `{path}/{callId}` - the
 | `X-StandIn-Timestamp` | Unix epoch milliseconds |
 | `X-StandIn-Signature` | `HMAC-SHA256(secret, "{timestampMs}.{callId}")`, lowercase hex |
 
-The legacy header names `X-OpenClawTeamsBridge-Timestamp` / `-Signature` are still accepted; StandIn sends both pairs during the transition.
+These are the only accepted names.
 
 Verification (`401` on failure): the timestamp must be within the two-sided freshness window (`HMAC_FRESHNESS_MS`, default 60 s past or future), the signature must match (constant-time compare), and the `(callId, ts, sig)` tuple must be **single-use** (a captured handshake cannot be replayed within the window). The bridge fails closed if the shared secret is unset. The call id is also cross-checked against the `session.start` body.
 

@@ -40,7 +40,7 @@ def test_defaults(monkeypatch):
     assert cfg.livekit_room_prefix == "msteams-"
     assert cfg.livekit_delete_room_on_end is True
     assert cfg.max_call_minutes == 0
-    # Same shape as the OpenClaw and Hermes plugins, so one StandIn identity URL works everywhere.
+    # What an identity registered with a bare host reaches: StandIn appends /{callId}.
     assert cfg.ws_path == "/msteams/calling"
 
 
