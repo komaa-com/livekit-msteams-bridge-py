@@ -68,7 +68,6 @@ def test_authorize_ok():
     assert auth == {"callId": "call-1"}
 
 
-
 def test_authorize_bad_signature():
     cfg = make_config()
     headers = _headers("wrong-secret", "call-1")
