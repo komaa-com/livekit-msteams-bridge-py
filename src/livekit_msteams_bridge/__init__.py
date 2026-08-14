@@ -19,7 +19,7 @@ from .server import BridgeServer, ReplayGuard, authorize_upgrade, call_id_from_p
 from .session import AgentRoomPort, CallSession, RoomConnector, RoomHandlers, WorkerPort
 from .vision import AmbientVisionConfig, VisionImage
 
-__version__ = "0.1.0"
+__version__ = "0.5.1"
 
 __all__ = [
     "AgentRoomPort",
