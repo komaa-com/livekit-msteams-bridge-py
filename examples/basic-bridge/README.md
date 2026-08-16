@@ -13,7 +13,7 @@ python main.py
 A LiveKit call needs **two** processes: your agent runs as a worker (registered under the same
 `agent_name` as `LIVEKIT_AGENT_NAME`), and this bridge dispatches it into a per-call room.
 
-It prints the WebSocket URL to give StandIn. Expose port 8080 with a tunnel (Tailscale Funnel,
+It prints the WebSocket URL to give StandIn. Expose port 9442 with a tunnel (Tailscale Funnel,
 cloudflared, ngrok, ...), set your StandIn identity's **Agent voice URL** to the `wss://` URL, and
 place a Teams call - the bridge creates a room, dispatches your agent, and the agent answers.
 

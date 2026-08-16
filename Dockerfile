@@ -6,6 +6,6 @@ COPY src ./src
 RUN pip install --no-cache-dir .
 
 # Env-configured; pass at runtime, never bake secrets into the image.
-EXPOSE 8080
+EXPOSE 9442
 USER nobody
 CMD ["livekit-msteams-bridge"]

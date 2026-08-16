@@ -24,7 +24,8 @@ DEFAULT_WS_PATH = "/msteams/calling"
 @dataclass(frozen=True)
 class BridgeConfig:
     port: int
-    """TCP port the bridge listens on for worker WebSocket upgrades."""
+    """TCP port the bridge listens on for worker WebSocket upgrades. Default 9442, the StandIn
+    calling-lane port shared by every bridge plugin."""
     host: str
     """Bind address."""
     ws_path: str
@@ -156,7 +157,7 @@ def load_config() -> BridgeConfig:
     # loud-on-typo policy of the numeric and boolean readers.
     raw_ws_path = os.environ.get("WS_PATH")
     return BridgeConfig(
-        port=int(_num_from_env("PORT", 8080)),
+        port=int(_num_from_env("PORT", 9442)),
         host=os.environ.get("BIND", "").strip() or "0.0.0.0",
         ws_path=normalize_ws_path(DEFAULT_WS_PATH if raw_ws_path is None else raw_ws_path),
         bridge_secret=_required("BRIDGE_SECRET"),
