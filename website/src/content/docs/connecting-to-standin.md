@@ -7,7 +7,7 @@ This bridge does not join Teams calls itself. That is the job of **StandIn** (th
 
 ## The connection model
 
-- **The bridge is a WebSocket server.** It listens on `BIND:PORT` (default `0.0.0.0:8080`) and waits.
+- **The bridge is a WebSocket server.** It listens on `BIND:PORT` (default `0.0.0.0:9442`) and waits.
 - **The StandIn media bridge is the client.** For each Teams call it opens **one WebSocket** to your bridge, appending the call id to the URL path (the call id is the last path segment).
 - **Authentication is HMAC over a shared secret.** Both sides hold the same secret. On the WebSocket upgrade, StandIn sends two headers whose signature is `HMAC-SHA256(secret, "{timestampMs}.{callId}")`. The bridge verifies it (constant-time, inside a 60 s freshness window, with a single-use replay guard) before accepting the connection. A mismatch is rejected with `401`.
 
@@ -15,7 +15,7 @@ This bridge does not join Teams calls itself. That is the job of **StandIn** (th
 flowchart LR
     Teams["Teams call"]
     StandIn["StandIn media bridge<br/>(hosted)<br/>dials {url}/{callId} with<br/>X-StandIn-Timestamp / -Signature"]
-    Bridge["your-host:8080<br/>(this bridge)"]
+    Bridge["your-host:9442<br/>(this bridge)"]
     Room["LiveKit room + agent"]
     Teams <--> StandIn
     StandIn -- "HMAC WS" --> Bridge
@@ -62,8 +62,10 @@ The value in your env **must equal** the value StandIn holds, or the HMAC handsh
 In the StandIn dashboard, set your identity's **agent WebSocket URL** to where this bridge listens, for example:
 
 ```text
-wss://el-bridge.example.com:8080/msteams/calling
+wss://lk-bridge.example.com:9442/msteams/calling
 ```
+
+When a tunnel or ingress fronts the bridge on 443 (Tailscale Funnel with `--set-path /msteams/calling http://127.0.0.1:9442/msteams/calling`, for instance), drop the port: `wss://lk-bridge.example.com/msteams/calling`.
 
 StandIn appends `/{callId}` per call. Any base path works - the bridge takes the **last path segment** as the call id and verifies it against the HMAC signature and the `session.start` body.
 

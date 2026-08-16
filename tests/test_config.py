@@ -35,7 +35,7 @@ def _clean_env(monkeypatch):
 def test_defaults(monkeypatch):
     _clean_env(monkeypatch)
     cfg = load_config()
-    assert cfg.port == 8080
+    assert cfg.port == 9442
     assert cfg.livekit_agent_name is None
     assert cfg.livekit_room_prefix == "msteams-"
     assert cfg.livekit_delete_room_on_end is True

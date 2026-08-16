@@ -46,7 +46,7 @@ Only CHANGED frames are sent (a frozen screen costs nothing), screen-share is tr
 
 | Env | Default | Meaning |
 |---|---|---|
-| `PORT` | `8080` | TCP port the bridge listens on. |
+| `PORT` | `9442` | TCP port the bridge listens on (the StandIn calling-lane port, shared by every bridge plugin). |
 | `BIND` | `0.0.0.0` | Bind address. |
 | `WS_PATH` | `/msteams/calling` | Base path the worker WebSocket is anchored on; a call dials `{WS_PATH}/{callId}` and nothing else is accepted (a foreign path is a `401`, before authentication). This is what an identity registered with a bare host will reach. `/healthz` and `/metrics` stay at the root. An empty value stops startup. |
 | `TLS_CERT_PATH` / `TLS_KEY_PATH` | unset | PEM cert/key for native TLS (`wss`). When both are set the bridge serves TLS itself; otherwise front the plain WS with a TLS terminator. |

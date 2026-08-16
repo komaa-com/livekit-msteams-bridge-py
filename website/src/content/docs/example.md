@@ -43,14 +43,14 @@ python main.py
 It prints the WebSocket URL to give StandIn:
 
 ```text
-Point your StandIn identity's agent WebSocket URL at ws://<this-host>:8080/msteams/calling
+Point your StandIn identity's agent WebSocket URL at ws://<this-host>:9442/msteams/calling
 ```
 
 The `main.py` is the recommended embedding shape in ~25 lines: `load_dotenv()`, `load_config()` (fails loud on any misconfiguration), `await start_server(cfg)`, and a graceful `await server.close()` on Ctrl-C / SIGTERM that ends live calls with a spoken-protocol `session.end` rather than a hard drop.
 
 ## 3. Connect StandIn and call
 
-1. Expose port 8080 with a tunnel (`tailscale funnel --bg --https=8080 8080`, `cloudflared tunnel --url http://localhost:8080`, or `ngrok http 8080`).
+1. Expose port 9442 with a tunnel (`tailscale funnel --bg --set-path /msteams/calling http://127.0.0.1:9442/msteams/calling`, which serves the bridge at `wss://<your-tailnet-host>/msteams/calling` with no port; `cloudflared tunnel --url http://localhost:9442`; or `ngrok http 9442`).
 2. In your [StandIn dashboard](https://standin.komaa.com/dashboard), set the identity's **Agent voice URL** to the `wss://.../msteams/calling` form and make sure the shared secret equals `BRIDGE_SECRET`.
 3. Call your Teams bot (or join the sandbox meeting). The bridge creates the room, dispatches `standin-agent`, and the agent answers.
 

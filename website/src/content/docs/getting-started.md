@@ -49,7 +49,7 @@ asyncio.run(main())
 `LIVEKIT_AGENT_NAME` must equal the `agent_name` your worker registers with, and both processes must point at the **same LiveKit project**. A mismatch is the classic silent failure: the room is created, the caller hears nothing, and the worker never gets a job.
 :::
 
-Every option is an environment variable; the package ships a fully commented [`.env.example`](https://github.com/komaa-com/livekit-msteams-bridge-py/blob/main/.env.example), and the [Configuration Reference](/livekit-msteams-bridge-py/configuration-reference/) documents each one. The bridge listens on `0.0.0.0:8080` by default and exposes `GET /healthz` for liveness checks.
+Every option is an environment variable; the package ships a fully commented [`.env.example`](https://github.com/komaa-com/livekit-msteams-bridge-py/blob/main/.env.example), and the [Configuration Reference](/livekit-msteams-bridge-py/configuration-reference/) documents each one. The bridge listens on `0.0.0.0:9442` by default and exposes `GET /healthz` for liveness checks.
 
 `BRIDGE_SECRET` comes from StandIn in the next step.
 
@@ -58,27 +58,27 @@ Every option is an environment variable; the package ships a fully commented [`.
 StandIn is the hosted service that joins the Teams call and dials into your bridge. Pick a tier at [standin.komaa.com](https://standin.komaa.com) (sandbox for an instant trial), pair, and you get a **shared secret**.
 
 1. Put the secret in `BRIDGE_SECRET` (both sides must match exactly).
-2. Point the identity's **agent WebSocket URL** at your bridge, for example `wss://lk-bridge.example.com:8080/msteams/calling`. StandIn appends `/{callId}` per call. The bridge answers only under that base path (`WS_PATH`).
+2. Point the identity's **agent WebSocket URL** at your bridge, for example `wss://lk-bridge.example.com:9442/msteams/calling` (or `wss://lk-bridge.example.com/msteams/calling` when a tunnel or ingress fronts the bridge on 443). StandIn appends `/{callId}` per call. The bridge answers only under that base path (`WS_PATH`).
 3. Restart the bridge if you changed the env.
 
-StandIn dials in **from the internet**, so a laptop or private host needs a public URL. A tunnel gives you one and terminates TLS (so you get `wss://` for free). Run one pointing at port `8080`:
+StandIn dials in **from the internet**, so a laptop or private host needs a public URL. A tunnel gives you one and terminates TLS (so you get `wss://` for free). Run one pointing at port `9442`:
 
-Tailscale Funnel:
+Tailscale Funnel (Funnel only serves 443, 8443 and 10000, so mount the bridge path on 443 instead of forwarding the port; the Agent voice URL is then `wss://<your-tailnet-host>/msteams/calling`, no port):
 
 ```bash
-tailscale funnel --bg --https=8080 8080
+tailscale funnel --bg --set-path /msteams/calling http://127.0.0.1:9442/msteams/calling
 ```
 
 Cloudflare Tunnel:
 
 ```bash
-cloudflared tunnel --url http://localhost:8080
+cloudflared tunnel --url http://localhost:9442
 ```
 
 ngrok:
 
 ```bash
-ngrok http 8080
+ngrok http 9442
 ```
 
 For a fixed production host use an ingress/load balancer, or serve TLS natively with `TLS_CERT_PATH` + `TLS_KEY_PATH`. Never give StandIn a plain `ws://` URL outside local testing.

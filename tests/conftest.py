@@ -12,7 +12,7 @@ from livekit_msteams_bridge.vision import AMBIENT_VISION_DEFAULTS, VisionImage
 
 def make_config(**overrides: Any) -> BridgeConfig:
     base: dict[str, Any] = dict(
-        port=8080,
+        port=9442,
         host="127.0.0.1",
         ws_path="/msteams/calling",
         bridge_secret="test-secret",

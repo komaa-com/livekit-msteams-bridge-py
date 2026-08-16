@@ -75,10 +75,18 @@ Then run it:
 livekit-msteams-bridge
 ```
 
-The bridge listens on **`:8080`** at **`/msteams/calling`** by default (`PORT`, `WS_PATH`); StandIn
+The bridge listens on **`:9442`** at **`/msteams/calling`** by default (`PORT`, `WS_PATH`); StandIn
 appends `/{callId}` per call. It answers ONLY under that path, so anything else co-hosted on the same
 origin keeps its own routes. Expose the port with a tunnel and register the public `wss://` URL as
-your identity's **Agent voice URL** in the StandIn dashboard - never the local `ws://` bind.
+your identity's **Agent voice URL** in the StandIn dashboard - never the local `ws://` bind. For
+example, with Tailscale Funnel (which only serves 443, 8443 and 10000, so mount the path rather than
+the port):
+
+```bash
+tailscale funnel --bg --set-path /msteams/calling http://127.0.0.1:9442/msteams/calling
+```
+
+and register `wss://<your-tailnet-host>/msteams/calling` (no port) as the Agent voice URL.
 
 ## Embed
 
@@ -160,7 +168,7 @@ Where the bridge stands today, and what each of these needs to move:
 - `/healthz` and `/metrics` are **unauthenticated**; only the WebSocket upgrade is HMAC-gated. They
   expose no call content, just liveness and counters, but keep the port behind your ingress or
   tunnel rules if you would rather not publish call volumes.
-- The Docker image exposes port **8080** and does not remap `PORT`/`BIND` at the Docker layer; use
+- The Docker image exposes port **9442** and does not remap `PORT`/`BIND` at the Docker layer; use
   `-e PORT=... -p <host>:<port>` together if you change them.
 
 ## Agent integration points
